@@ -27,7 +27,6 @@ export async function login(
     const data = await res.json();
 
     if (!res.ok) {
-      // FastAPI returns { detail: "..." } on errors
       return { success: false, error: data.detail || "Login failed" };
     }
 
@@ -39,6 +38,35 @@ export async function login(
     return { success: true, user: data.user };
   } catch (err) {
     return { success: false, error: "Cannot connect to server. Is the backend running?" };
+  }
+}
+
+// ─── Refresh Token ─────────────────────────────────────────────────────────
+export async function refreshAccessToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const refreshToken = localStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!res.ok) {
+      logout();
+      return null;
+    }
+
+    const data = await res.json();
+    if (data && data.access_token) {
+      localStorage.setItem(TOKEN_KEY, data.access_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -72,13 +100,14 @@ export function getToken(): string | null {
 }
 
 // ─── Authenticated fetch wrapper ───────────────────────────────────────────
-// Use this anywhere to call API endpoints that require auth
+// Automatically handles auth headers and attempts token refresh on 401
 export async function authFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = getToken();
-  return fetch(`${API_BASE}${path}`, {
+  let token = getToken();
+
+  let res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -86,4 +115,27 @@ export async function authFetch(
       ...(options.headers || {}),
     },
   });
+
+  // If 401 Unauthorized, attempt token refresh once
+  if (res.status === 401 && typeof window !== "undefined") {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry the original request with new token
+      res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${newToken}`,
+          ...(options.headers || {}),
+        },
+      });
+    } else {
+      // If refresh fails, redirect to login page if on browser
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+  }
+
+  return res;
 }

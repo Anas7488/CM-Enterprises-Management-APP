@@ -384,3 +384,7 @@ tree -I 'node_modules|.next|venv|__pycache__|.git'
 
 > Start with Step 5 — write `config.py` first.
 > Every other file depends on it.
+
+```
+venv/bin/alembic revision --autogenerate -m "create_core_business_tables"
+The following environment is selected: ~/Documents/Indo Paints/Application Management/.venv/bin/python```
