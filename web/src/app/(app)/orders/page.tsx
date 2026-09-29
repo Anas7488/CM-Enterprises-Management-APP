@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
@@ -181,6 +181,21 @@ export default function OrdersPage() {
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [customerAreaFilter, setCustomerAreaFilter] = useState("All");
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close customer dropdown instantly on outside click
+  useEffect(() => {
+    if (!isCustomerDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (customerDropdownRef.current?.contains(t)) return;
+      if (customerInputRef.current?.contains(t)) return;
+      setIsCustomerDropdownOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isCustomerDropdownOpen]);
 
   const [customRemarks, setCustomRemarks] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
@@ -191,6 +206,23 @@ export default function OrdersPage() {
   ]);
   const [activeProductSearchIdx, setActiveProductSearchIdx] = useState<number | null>(null);
   const [productSearchQueries, setProductSearchQueries] = useState<Record<number, string>>({});
+  const productDropdownRef = useRef<HTMLDivElement>(null);
+  const productInputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+
+  // Close product dropdown instantly on outside click
+  useEffect(() => {
+    if (activeProductSearchIdx === null) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (productDropdownRef.current?.contains(t)) return;
+      for (const input of productInputRefs.current.values()) {
+        if (input.contains(t)) return;
+      }
+      setActiveProductSearchIdx(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [activeProductSearchIdx]);
 
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -1074,6 +1106,7 @@ export default function OrdersPage() {
                             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                           />
                           <input
+                            ref={customerInputRef}
                             type="text"
                             placeholder="Type shop name, phone or area..."
                             value={customerSearchQuery}
@@ -1090,7 +1123,10 @@ export default function OrdersPage() {
 
                     {/* Customer Results List */}
                     {isCustomerDropdownOpen && (
-                      <div className="max-h-52 overflow-y-auto border border-border rounded-xl bg-background divide-y divide-border shadow-md">
+                      <div
+                        ref={customerDropdownRef}
+                        className="max-h-52 overflow-y-auto border border-border rounded-xl bg-background divide-y divide-border shadow-md"
+                      >
                         {filteredCustomers.length > 0 ? (
                           filteredCustomers.slice(0, 50).map((c) => {
                             const areaCode = c.area?.route?.route_number
@@ -1100,7 +1136,8 @@ export default function OrdersPage() {
                               <button
                                 key={c.id}
                                 type="button"
-                                onClick={() => {
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
                                   setSelectedCustomerId(c.id);
                                   setIsCustomerDropdownOpen(false);
                                   setCreateError("");
@@ -1253,6 +1290,10 @@ export default function OrdersPage() {
                                     className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
                                   />
                                   <input
+                                    ref={(el) => {
+                                      if (el) productInputRefs.current.set(idx, el);
+                                      else productInputRefs.current.delete(idx);
+                                    }}
                                     type="text"
                                     placeholder="Search by code, shade, or name..."
                                     value={currentQuery}
@@ -1281,18 +1322,23 @@ export default function OrdersPage() {
 
                               {/* Dropdown Menu */}
                               {activeProductSearchIdx === idx && !selectedProd && (
-                                <div className="absolute left-3 right-3 top-12 z-50 max-h-48 overflow-y-auto bg-card border border-border rounded-xl shadow-xl divide-y divide-border">
+                                <div
+                                  ref={productDropdownRef}
+                                  className="absolute left-3 right-3 top-12 z-50 max-h-48 overflow-y-auto bg-card border border-border rounded-xl shadow-xl divide-y divide-border"
+                                >
                                   {matchingProducts.length > 0 ? (
                                     matchingProducts.slice(0, 30).map((p) => (
                                       <button
                                         key={p.id}
                                         type="button"
-                                        onClick={() => {
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
                                           selectProductForItem(idx, p.id);
                                           setProductSearchQueries({
                                             ...productSearchQueries,
                                             [idx]: p.display_name,
                                           });
+                                          setActiveProductSearchIdx(null);
                                         }}
                                         className="w-full text-left p-2.5 hover:bg-muted text-xs flex items-center justify-between gap-2"
                                       >

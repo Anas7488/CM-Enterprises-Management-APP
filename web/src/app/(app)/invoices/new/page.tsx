@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -99,6 +99,9 @@ function NewInvoiceForm() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | "">("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+  const [customerDropdownAnchor, setCustomerDropdownAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
 
   const [invoiceDate, setInvoiceDate] = useState(() => {
     return new Date().toISOString().split("T")[0];
@@ -130,6 +133,66 @@ function NewInvoiceForm() {
   // Product Combobox Active Row
   const [activeProductSearchRow, setActiveProductSearchRow] = useState<string | null>(null);
   const [productSearchTerm, setProductSearchTerm] = useState("");
+  // Anchor rect for the fixed dropdown
+  const [dropdownAnchor, setDropdownAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
+  // Refs map: rowId -> input element
+  const productInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // Ref for the dropdown panel itself (to detect clicks inside)
+  const dropdownPanelRef = useRef<HTMLDivElement>(null);
+
+  const closeProductDropdown = useCallback(() => {
+    setActiveProductSearchRow(null);
+    setDropdownAnchor(null);
+  }, []);
+
+  const openProductDropdown = useCallback((rowId: string) => {
+    setActiveProductSearchRow(rowId);
+    const inputEl = productInputRefs.current.get(rowId);
+    if (inputEl) {
+      const rect = inputEl.getBoundingClientRect();
+      setDropdownAnchor({ top: rect.bottom + 4, left: rect.left, width: Math.max(320, rect.width) });
+    }
+  }, []);
+
+  // Close customer dropdown on click outside
+  useEffect(() => {
+    if (!isCustomerDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (customerDropdownRef.current?.contains(target)) return;
+      if (customerInputRef.current?.contains(target)) return;
+      setIsCustomerDropdownOpen(false);
+      setCustomerDropdownAnchor(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isCustomerDropdownOpen]);
+
+  const openCustomerDropdown = useCallback(() => {
+    setIsCustomerDropdownOpen(true);
+    if (customerInputRef.current) {
+      const rect = customerInputRef.current.getBoundingClientRect();
+      setCustomerDropdownAnchor({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, []);
+
+  // Close product dropdown on click outside
+  useEffect(() => {
+    if (!activeProductSearchRow) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      // If click is inside the dropdown panel, ignore
+      if (dropdownPanelRef.current?.contains(target)) return;
+      // If click is inside any product search input, ignore
+      for (const input of productInputRefs.current.values()) {
+        if (input.contains(target)) return;
+      }
+      closeProductDropdown();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [activeProductSearchRow, closeProductDropdown]);
+
 
   // Submission State
   const [submitting, setSubmitting] = useState(false);
@@ -358,7 +421,15 @@ function NewInvoiceForm() {
 
     const extraDisc = Number(extraDiscount) || 0;
     const finalSubtotal = Math.max(0, subtotal - extraDisc);
-    const grandTotal = finalSubtotal + totalGst;
+    const rawTotal = Math.round((finalSubtotal + totalGst) * 100) / 100;
+
+    // Round-off: decimal < 0.50 → round down (negative), >= 0.50 → round up (positive)
+    const decimalPart = parseFloat((rawTotal % 1).toFixed(2));
+    const roundOff =
+      decimalPart >= 0.5
+        ? parseFloat((1 - decimalPart).toFixed(2))
+        : parseFloat((-decimalPart).toFixed(2));
+    const grandTotal = parseFloat((rawTotal + roundOff).toFixed(2));
 
     return {
       computedItems,
@@ -370,9 +441,23 @@ function NewInvoiceForm() {
       totalGst,
       cgst: totalGst / 2,
       sgst: totalGst / 2,
+      roundOff,
       grandTotal,
     };
   }, [items, extraDiscount]);
+
+  // ─── Filtered product options for active search row ────────────────────────
+  const filteredProductOptions = useMemo(() => {
+    if (!productSearchTerm.trim()) return products.slice(0, 30);
+    const q = productSearchTerm.toLowerCase();
+    return products.filter((p) =>
+      p.display_name?.toLowerCase().includes(q) ||
+      p.shade_name?.toLowerCase().includes(q) ||
+      p.shade_code?.toLowerCase().includes(q) ||
+      p.variant_name?.toLowerCase().includes(q)
+    ).slice(0, 30);
+  }, [products, productSearchTerm]);
+
 
   // ─── Form Submission ───────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
@@ -562,14 +647,15 @@ function NewInvoiceForm() {
                       className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
                     <input
+                      ref={customerInputRef}
                       type="text"
                       placeholder={loadingRefs ? "Loading customers..." : "Search customer or area..."}
                       value={customerSearch}
                       onChange={(e) => {
                         setCustomerSearch(e.target.value);
-                        setIsCustomerDropdownOpen(true);
+                        openCustomerDropdown();
                       }}
-                      onFocus={() => setIsCustomerDropdownOpen(true)}
+                      onFocus={openCustomerDropdown}
                       className="w-full bg-background border border-border rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/40"
                     />
                     <ChevronDown
@@ -578,15 +664,25 @@ function NewInvoiceForm() {
                     />
                   </div>
 
-                  {isCustomerDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-border/40">
+                  {isCustomerDropdownOpen && customerDropdownAnchor && (
+                    <div
+                      ref={customerDropdownRef}
+                      className="fixed z-[100] bg-card border border-border rounded-lg shadow-xl max-h-60 overflow-y-auto divide-y divide-border/40"
+                      style={{
+                        top: customerDropdownAnchor.top,
+                        left: customerDropdownAnchor.left,
+                        width: customerDropdownAnchor.width,
+                      }}
+                    >
                       {filteredCustomers.length > 0 ? (
                         filteredCustomers.map((c) => (
                           <div
                             key={c.id}
-                            onClick={() => {
+                            onMouseDown={(e) => {
+                              e.preventDefault();
                               setSelectedCustomerId(c.id);
                               setIsCustomerDropdownOpen(false);
+                              setCustomerDropdownAnchor(null);
                             }}
                             className="p-2.5 hover:bg-muted/60 cursor-pointer transition-colors"
                           >
@@ -698,17 +794,6 @@ function NewInvoiceForm() {
                   const prod = item.product;
                   const isSearchingThisRow = activeProductSearchRow === item.id;
 
-                  const filteredProductOptions = products.filter((p) => {
-                    if (!productSearchTerm.trim()) return true;
-                    const q = productSearchTerm.toLowerCase();
-                    return (
-                      p.display_name?.toLowerCase().includes(q) ||
-                      p.shade_name?.toLowerCase().includes(q) ||
-                      p.shade_code?.toLowerCase().includes(q) ||
-                      p.variant_name?.toLowerCase().includes(q)
-                    );
-                  }).slice(0, 30);
-
                   return (
                     <tr key={item.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3 text-muted-foreground font-mono">
@@ -757,46 +842,20 @@ function NewInvoiceForm() {
                         ) : (
                           <div className="relative">
                             <input
+                              ref={(el) => {
+                                if (el) productInputRefs.current.set(item.id, el);
+                                else productInputRefs.current.delete(item.id);
+                              }}
                               type="text"
                               placeholder="Search paint, shade, size..."
                               value={isSearchingThisRow ? productSearchTerm : ""}
                               onChange={(e) => {
                                 setProductSearchTerm(e.target.value);
-                                setActiveProductSearchRow(item.id);
+                                openProductDropdown(item.id);
                               }}
-                              onFocus={() => setActiveProductSearchRow(item.id)}
+                              onFocus={() => openProductDropdown(item.id)}
                               className="w-full bg-background border border-border rounded px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#1E3A8A]"
                             />
-
-                            {isSearchingThisRow && (
-                              <div className="absolute left-0 top-full mt-1 w-80 bg-card border border-border rounded-lg shadow-2xl z-50 max-h-52 overflow-y-auto divide-y divide-border/40">
-                                {filteredProductOptions.length > 0 ? (
-                                  filteredProductOptions.map((p) => (
-                                    <div
-                                      key={p.id}
-                                      onClick={() => handleSelectProduct(item.id, p)}
-                                      className="p-2 hover:bg-muted/70 cursor-pointer text-xs transition-colors"
-                                    >
-                                      <div className="font-semibold text-foreground">
-                                        {p.display_name}
-                                      </div>
-                                      <div className="text-[10px] text-muted-foreground flex justify-between mt-0.5">
-                                        <span>
-                                          Rate: ₹{p.dealer_price || p.mrp || 0} • {p.unit}
-                                        </span>
-                                        <span className="font-medium text-emerald-600">
-                                          Stock: {p.stock ?? "--"}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="p-2.5 text-center text-[11px] text-muted-foreground">
-                                    No products found
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                         )}
                       </td>
@@ -1006,6 +1065,22 @@ function NewInvoiceForm() {
               </span>
             </div>
 
+            {calculation.roundOff !== 0 && (
+              <div
+                className={`flex justify-between ${
+                  calculation.roundOff > 0 ? "text-blue-600" : "text-orange-600"
+                }`}
+              >
+                <span className="italic font-medium">
+                  Round Off {calculation.roundOff > 0 ? "(+)" : "(-)"}
+                </span>
+                <span className="font-medium">
+                  {calculation.roundOff > 0 ? "+" : ""}
+                  {calculation.roundOff.toFixed(2)}
+                </span>
+              </div>
+            )}
+
             <div className="border-t border-border pt-3 flex justify-between items-baseline text-base font-bold text-foreground">
               <span>Grand Total:</span>
               <span className="text-xl text-[#1E3A8A]">
@@ -1015,6 +1090,43 @@ function NewInvoiceForm() {
           </div>
         </div>
       </form>
+
+      {/* ── Fixed-position product search dropdown (escapes overflow:auto) ── */}
+      {activeProductSearchRow && dropdownAnchor && (
+        <div
+          ref={dropdownPanelRef}
+          className="fixed z-[100] bg-card border border-border rounded-lg shadow-2xl max-h-56 overflow-y-auto divide-y divide-border/40"
+          style={{
+            top: dropdownAnchor.top,
+            left: dropdownAnchor.left,
+            width: dropdownAnchor.width,
+          }}
+        >
+          {filteredProductOptions.length > 0 ? (
+            filteredProductOptions.map((p) => (
+              <div
+                key={p.id}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelectProduct(activeProductSearchRow, p);
+                  closeProductDropdown();
+                }}
+                className="p-2.5 hover:bg-muted/70 cursor-pointer text-xs transition-colors"
+              >
+                <div className="font-semibold text-foreground">{p.display_name}</div>
+                <div className="text-[10px] text-muted-foreground flex justify-between mt-0.5">
+                  <span>Rate: ₹{p.dealer_price || p.mrp || 0} • {p.unit}</span>
+                  <span className="font-medium text-emerald-600">Stock: {p.stock ?? "--"}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-3 text-center text-[11px] text-muted-foreground">
+              {productSearchTerm.length > 0 ? "No products found" : "Start typing to search..."}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

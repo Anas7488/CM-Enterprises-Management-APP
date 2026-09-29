@@ -5,6 +5,9 @@ from app.core.database import SessionLocal
 from app.core.security import decode_token
 from app.shared.enums.roles import UserRole
 
+# Ensure all SQLAlchemy models are registered in the mapper registry
+import app.shared.models
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 

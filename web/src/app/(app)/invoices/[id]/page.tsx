@@ -71,6 +71,7 @@ interface InvoiceDetail {
   subtotal: number | string;
   discount_amount: number | string;
   gst_amount: number | string;
+  round_off?: number | string | null;
   total_amount: number | string;
   paid_amount: number | string;
   status: string;
@@ -170,6 +171,7 @@ export default function InvoiceDetailPage() {
   const gstTotal = Number(invoice.gst_amount || 0);
   const totalAmount = Number(invoice.total_amount || 0);
   const extraDiscount = Number(invoice.discount_amount || 0);
+  const roundOff = Number(invoice.round_off || 0);
   const cgstAmount = gstTotal / 2;
   const sgstAmount = gstTotal / 2;
 
@@ -430,7 +432,28 @@ export default function InvoiceDetailPage() {
                   </td>
                 </tr>
               )}
-            </tbody>
+
+              {/* Round Off */}
+              {roundOff !== 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className={`px-3 py-0.5 border-r border-gray-200 text-right font-bold italic ${
+                      roundOff > 0 ? "text-blue-700" : "text-orange-700"
+                    }`}
+                  >
+                    Round Off {roundOff > 0 ? "(+)" : "(-)"}
+                  </td>
+                  <td
+                    className={`px-3 py-0.5 text-right font-semibold ${
+                      roundOff > 0 ? "text-blue-700" : "text-orange-700"
+                    }`}
+                  >
+                    {roundOff > 0 ? "+" : ""}
+                    {roundOff.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              )}
 
             {/* Total Row */}
             <tfoot>
