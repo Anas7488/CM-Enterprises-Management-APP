@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Printer, Trash2, Loader2, AlertCircle, FileText } from "lucide-react";
+import {
+  ArrowLeft,
+  Printer,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  RotateCcw,
+  X,
+  CheckCircle2,
+} from "lucide-react";
 import {
   COMPANY,
   formatCurrency,
@@ -10,6 +19,12 @@ import {
   numberToWords,
 } from "@/modules/invoices/data";
 import { authFetch } from "@/lib/auth";
+
+const fmt = (n: number | string) =>
+  `₹${Number(n || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 // ─── Print styles injected on mount ────────────────────────────────────────
 const PRINT_CSS = `
@@ -89,6 +104,26 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Issue Credit Note modal state
+  const [showCnModal, setShowCnModal] = useState(false);
+  const [cnReason, setCnReason] = useState("Sales Return / Damaged Goods");
+  const [cnRemarks, setCnRemarks] = useState("");
+  const [cnItems, setCnItems] = useState<
+    Array<{
+      product_id: number;
+      product_name: string;
+      invoiced_qty: number;
+      return_qty: number;
+      rate: number;
+      gst_rate: number;
+      hsn_code: string;
+      restock_inventory: boolean;
+      selected: boolean;
+    }>
+  >([]);
+  const [cnSubmitting, setCnSubmitting] = useState(false);
+  const [cnError, setCnError] = useState("");
+
   useEffect(() => {
     async function loadInvoice() {
       if (!params.id) return;
@@ -138,6 +173,118 @@ export default function InvoiceDetailPage() {
     } catch (err: any) {
       alert(err.message || "Failed to delete invoice");
       setDeleting(false);
+    }
+  };
+
+  const handleOpenCreditNoteModal = () => {
+    if (!invoice) return;
+    setCnError("");
+    setCnRemarks("");
+    setCnReason("Sales Return / Damaged Goods");
+    const items = (invoice.items || []).map((it) => ({
+      product_id: it.product_id,
+      product_name: it.product_name,
+      invoiced_qty: Number(it.quantity),
+      return_qty: Number(it.quantity),
+      rate: Number(it.rate),
+      gst_rate: Number(it.gst_rate),
+      hsn_code: it.hsn_code || "",
+      restock_inventory: true,
+      selected: true,
+    }));
+    setCnItems(items);
+    setShowCnModal(true);
+  };
+
+  const handleToggleItem = (idx: number) => {
+    setCnItems((prev) =>
+      prev.map((item, i) => (i === idx ? { ...item, selected: !item.selected } : item))
+    );
+  };
+
+  const handleQtyChange = (idx: number, qty: number) => {
+    setCnItems((prev) =>
+      prev.map((item, i) =>
+        i === idx ? { ...item, return_qty: Math.min(item.invoiced_qty, Math.max(0.01, qty)) } : item
+      )
+    );
+  };
+
+  const handleRestockToggle = (idx: number) => {
+    setCnItems((prev) =>
+      prev.map((item, i) =>
+        i === idx ? { ...item, restock_inventory: !item.restock_inventory } : item
+      )
+    );
+  };
+
+  const cnCalculatedTotal = useMemo(() => {
+    let sub = 0;
+    let gst = 0;
+    for (const item of cnItems) {
+      if (item.selected && item.return_qty > 0) {
+        const itemSub = item.rate * item.return_qty;
+        const itemGst = itemSub * (item.gst_rate / 100);
+        sub += itemSub;
+        gst += itemGst;
+      }
+    }
+    const raw = sub + gst;
+    const rounded = Math.round(raw);
+    const roundOff = rounded - raw;
+    return {
+      subtotal: sub,
+      gstAmount: gst,
+      roundOff,
+      total: rounded,
+    };
+  }, [cnItems]);
+
+  const handleSubmitCreditNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!invoice) return;
+    const selectedItems = cnItems.filter((it) => it.selected && it.return_qty > 0);
+    if (selectedItems.length === 0) {
+      setCnError("Please select at least one item to return.");
+      return;
+    }
+
+    try {
+      setCnSubmitting(true);
+      setCnError("");
+
+      const payload = {
+        invoice_id: invoice.id,
+        reason: cnReason,
+        remarks: cnRemarks.trim() || null,
+        items: selectedItems.map((it) => ({
+          product_id: it.product_id,
+          quantity: it.return_qty,
+          rate: it.rate,
+          gst_rate: it.gst_rate,
+          hsn_code: it.hsn_code || null,
+          restock_inventory: it.restock_inventory,
+        })),
+      };
+
+      const res = await authFetch("/credit-notes/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Failed to create credit note");
+      }
+
+      const newCn = await res.json();
+      setShowCnModal(false);
+      router.push(`/credit-notes/${newCn.id}`);
+    } catch (err: any) {
+      setCnError(err.message || "Failed to create credit note");
+    } finally {
+      setCnSubmitting(false);
     }
   };
 
@@ -194,6 +341,14 @@ export default function InvoiceDetailPage() {
         </button>
         <div className="flex items-center gap-2">
           <button
+            onClick={handleOpenCreditNoteModal}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-500/10 border border-red-200 rounded-lg transition-all"
+            title="Issue a Credit Note / Sales Return against this invoice"
+          >
+            <RotateCcw size={14} />
+            Issue Credit Note
+          </button>
+          <button
             onClick={handleDelete}
             disabled={deleting}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-500/10 border border-red-200 rounded-lg transition-all disabled:opacity-50"
@@ -236,236 +391,146 @@ export default function InvoiceDetailPage() {
                 CM
               </div>
               <div>
-                <h2 className="text-sm font-extrabold text-gray-900 tracking-wide">
+                <h2 className="font-extrabold text-gray-900 text-sm tracking-tight leading-tight">
                   {COMPANY.name}
                 </h2>
-                {COMPANY.address.map((line, i) => (
-                  <p key={i} className="text-[10px] text-gray-600 leading-tight">
-                    {line}
-                  </p>
-                ))}
-                <p className="text-[10px] text-gray-600 mt-0.5">GSTIN/UIN: {COMPANY.gstin}</p>
-                <p className="text-[10px] text-gray-600">
-                  State Name: {COMPANY.stateName}, Code: {COMPANY.stateCode}
-                </p>
-                <p className="text-[10px] text-gray-600">Contact: {COMPANY.contact}</p>
+                <div className="text-[11px] text-gray-500 font-medium">
+                  Authorised Dealer &amp; Stockist
+                </div>
               </div>
+            </div>
+
+            <div className="text-[11px] text-gray-600 leading-relaxed">
+              {COMPANY.address.map((line, i) => (
+                <p key={i}>{line}</p>
+              ))}
+              <div className="mt-1 font-semibold text-gray-700">
+                GSTIN: <span className="font-mono text-gray-900">{COMPANY.gstin}</span>
+              </div>
+              <div>State: {COMPANY.stateName}, Code: {COMPANY.stateCode}</div>
+              <div>Phone: {COMPANY.contact}</div>
             </div>
           </div>
 
-          {/* Invoice Meta Grid */}
-          <div className="text-[10px]">
-            <div className="grid grid-cols-2">
-              <div className="p-2 border-b border-r border-gray-200">
-                <span className="text-gray-500 block">Invoice No.</span>
-                <p className="font-bold text-gray-900 text-xs">{invoice.invoice_no}</p>
+          {/* Invoice Meta */}
+          <div className="p-4 flex flex-col justify-between text-[11px] bg-gray-50/50">
+            <div className="space-y-2">
+              <div className="flex justify-between border-b border-gray-200 pb-1.5">
+                <span className="text-gray-500">Invoice No:</span>
+                <span className="font-mono font-bold text-gray-900 text-xs">
+                  {invoice.invoice_no}
+                </span>
               </div>
-              <div className="p-2 border-b border-gray-200">
-                <span className="text-gray-500 block">Dated</span>
-                <p className="font-bold text-gray-900 text-xs">
+              <div className="flex justify-between border-b border-gray-200 pb-1.5">
+                <span className="text-gray-500">Dated:</span>
+                <span className="font-bold text-gray-900">
                   {formatDateFormal(invoice.date)}
-                </p>
+                </span>
               </div>
-              <div className="p-2 border-b border-r border-gray-200">
-                <span className="text-gray-500 block">Due Date</span>
-                <p className="font-semibold text-gray-900">
+              <div className="flex justify-between border-b border-gray-200 pb-1.5">
+                <span className="text-gray-500">Due Date:</span>
+                <span className="font-bold text-gray-900">
                   {formatDateFormal(invoice.due_date)}
-                </p>
+                </span>
               </div>
-              <div className="p-2 border-b border-gray-200">
-                <span className="text-gray-500 block">Order Ref.</span>
-                <p className="font-semibold text-[#1E3A8A]">
-                  {invoice.order_no || "—"}
-                </p>
-              </div>
-              <div className="p-2 border-b border-r border-gray-200">
-                <span className="text-gray-500 block">Payment Status</span>
-                <p className="font-bold text-emerald-700 uppercase">{invoice.status}</p>
-              </div>
-              <div className="p-2 border-b border-gray-200">
-                <span className="text-gray-500 block">Place of Supply</span>
-                <p className="font-medium text-gray-800">Karnataka (29)</p>
-              </div>
-            </div>
-            {invoice.remarks && (
-              <div className="p-2">
-                <span className="text-gray-500 block">Remarks / Delivery Note:</span>
-                <p className="text-gray-800 font-medium">{invoice.remarks}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Buyer Info */}
-        <div className="p-4 border-b border-gray-300">
-          <p className="text-[10px] text-gray-500 mb-0.5">Billed To (Buyer):</p>
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-extrabold text-gray-900">
-                {invoice.customer_area_code ? `Area ${invoice.customer_area_code} • ` : ""}
-                {invoice.customer_name}
-              </p>
-              {invoice.customer_area && (
-                <p className="text-[10px] text-[#1E3A8A] font-semibold">
-                  {invoice.customer_area}
-                </p>
+              {invoice.order_no && (
+                <div className="flex justify-between border-b border-gray-200 pb-1.5">
+                  <span className="text-gray-500">Order Reference:</span>
+                  <span className="font-mono font-bold text-gray-900">
+                    {invoice.order_no}
+                  </span>
+                </div>
               )}
-              {invoice.customer_address && (
-                <p className="text-[10px] text-gray-700 leading-relaxed max-w-md">
-                  {invoice.customer_address}
-                </p>
-              )}
-            </div>
-            <div className="text-right text-[10px] space-y-0.5">
-              {invoice.customer_contact && (
-                <p className="text-gray-600">Contact: {invoice.customer_contact}</p>
-              )}
-              {invoice.customer_phone && (
-                <p className="text-gray-600">Phone: {invoice.customer_phone}</p>
-              )}
-              <p className="text-gray-600">
-                GSTIN: {invoice.customer_gstin || "URP / Unregistered"}
-              </p>
             </div>
           </div>
         </div>
 
-        {/* ── Line Items Table ─────────────────────────────────────── */}
-        <div>
-          <table className="w-full text-left text-[11px] border-collapse">
+        {/* Buyer Details */}
+        <div className="p-4 border-b border-gray-300 bg-white">
+          <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1">
+            Buyer (Bill to &amp; Ship to)
+          </div>
+          <div className="text-sm font-bold text-gray-900">
+            {invoice.customer_name}
+          </div>
+          {invoice.customer_address && (
+            <div className="text-[11px] text-gray-600 whitespace-pre-line mt-0.5">
+              {invoice.customer_address}
+            </div>
+          )}
+          {invoice.customer_area && (
+            <div className="text-[11px] text-gray-600 mt-0.5">
+              Area: {invoice.customer_area} ({invoice.customer_area_code || "--"})
+            </div>
+          )}
+          <div className="text-[11px] text-gray-700 font-medium mt-1">
+            GSTIN:{" "}
+            <span className="font-mono font-bold text-gray-900">
+              {invoice.customer_gstin || "URP (Unregistered)"}
+            </span>
+          </div>
+          {invoice.customer_phone && (
+            <div className="text-[11px] text-gray-600">
+              Contact: {invoice.customer_phone}
+            </div>
+          )}
+        </div>
+
+        {/* Items Table */}
+        <div className="border-b border-gray-300">
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-300 text-[10px] font-bold text-gray-700 uppercase">
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-8">#</th>
-                <th className="px-3 py-2 border-r border-gray-200">Description of Goods</th>
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-16">HSN/SAC</th>
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-16">Qty</th>
-                <th className="px-2 py-2 text-right border-r border-gray-200 w-20">Rate (₹)</th>
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-10">Unit</th>
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-14">Disc %</th>
-                <th className="px-2 py-2 text-center border-r border-gray-200 w-14">GST %</th>
-                <th className="px-3 py-2 text-right w-24">Amount (₹)</th>
+              <tr className="border-b border-gray-300 bg-gray-100 text-gray-700 font-semibold text-[11px]">
+                <th className="py-2 px-3 text-center border-r border-gray-300 w-10">Sl No</th>
+                <th className="py-2 px-3 border-r border-gray-300">Description of Goods</th>
+                <th className="py-2 px-3 text-center border-r border-gray-300 w-20">HSN/SAC</th>
+                <th className="py-2 px-3 text-right border-r border-gray-300 w-24">Quantity</th>
+                <th className="py-2 px-3 text-right border-r border-gray-300 w-24">Rate (₹)</th>
+                <th className="py-2 px-3 text-right border-r border-gray-300 w-16">Disc %</th>
+                <th className="py-2 px-3 text-right border-r border-gray-300 w-16">GST %</th>
+                <th className="py-2 px-3 text-right w-28">Amount (₹)</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {invoice.items.map((item, idx) => (
-                <tr key={idx} className="border-b border-gray-100">
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-500">
+                <tr key={item.id} className="text-[11px]">
+                  <td className="py-2 px-3 text-center border-r border-gray-300 text-gray-500">
                     {idx + 1}
                   </td>
-                  <td className="px-3 py-2 border-r border-gray-200 font-semibold text-gray-900">
+                  <td className="py-2 px-3 border-r border-gray-300 font-medium text-gray-900">
                     {item.product_name}
                   </td>
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-600">
-                    {item.hsn_code || "3208"}
+                  <td className="py-2 px-3 text-center border-r border-gray-300 font-mono text-gray-600">
+                    {item.hsn_code}
                   </td>
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-700 font-medium">
-                    {item.quantity}
+                  <td className="py-2 px-3 text-right border-r border-gray-300 font-bold text-gray-900">
+                    {Number(item.quantity).toLocaleString("en-IN")} {item.unit}
                   </td>
-                  <td className="px-2 py-2 text-right border-r border-gray-200 text-gray-700">
-                    {Number(item.rate).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                    })}
+                  <td className="py-2 px-3 text-right border-r border-gray-300 font-mono text-gray-700">
+                    {Number(item.rate).toFixed(2)}
                   </td>
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-500">
-                    {item.unit}
-                  </td>
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-600">
+                  <td className="py-2 px-3 text-right border-r border-gray-300 font-mono text-gray-700">
                     {Number(item.discount_pct) > 0 ? `${item.discount_pct}%` : "—"}
                   </td>
-                  <td className="px-2 py-2 text-center border-r border-gray-200 text-gray-600">
-                    {Number(item.gst_rate) > 0 ? `${item.gst_rate}%` : "0% (W.O)"}
+                  <td className="py-2 px-3 text-right border-r border-gray-300 font-bold text-gray-700">
+                    {item.gst_rate}%
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                    {Number(item.total).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                    })}
+                  <td className="py-2 px-3 text-right font-bold font-mono text-gray-900">
+                    {Number(item.total).toFixed(2)}
                   </td>
                 </tr>
               ))}
-
-              {/* Subtotal */}
-              <tr className="border-t border-gray-200">
-                <td colSpan={3} className="px-3 py-1 border-r border-gray-200 font-bold text-right text-gray-700">
-                  Subtotal (Pre-tax)
-                </td>
-                <td className="px-2 py-1 text-center border-r border-gray-200 font-bold">
-                  {totalQty}
-                </td>
-                <td colSpan={4} className="border-r border-gray-200"></td>
-                <td className="px-3 py-1 text-right font-bold text-gray-900">
-                  {subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </td>
-              </tr>
-
-              {/* Extra Invoice Discount */}
-              {extraDiscount > 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-0.5 border-r border-gray-200 text-right font-bold text-emerald-700 italic">
-                    Less: Extra Discount
-                  </td>
-                  <td className="px-3 py-0.5 text-right text-emerald-700 font-semibold">
-                    - {extraDiscount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              )}
-
-              {/* CGST */}
-              {cgstAmount > 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-0.5 border-r border-gray-200 text-right font-bold text-gray-700 italic">
-                    CGST
-                  </td>
-                  <td className="px-3 py-0.5 text-right text-gray-800">
-                    {cgstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              )}
-
-              {/* SGST */}
-              {sgstAmount > 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-0.5 border-r border-gray-200 text-right font-bold text-gray-700 italic">
-                    SGST
-                  </td>
-                  <td className="px-3 py-0.5 text-right text-gray-800">
-                    {sgstAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              )}
-
-              {/* Round Off */}
-              {roundOff !== 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className={`px-3 py-0.5 border-r border-gray-200 text-right font-bold italic ${
-                      roundOff > 0 ? "text-blue-700" : "text-orange-700"
-                    }`}
-                  >
-                    Round Off {roundOff > 0 ? "(+)" : "(-)"}
-                  </td>
-                  <td
-                    className={`px-3 py-0.5 text-right font-semibold ${
-                      roundOff > 0 ? "text-blue-700" : "text-orange-700"
-                    }`}
-                  >
-                    {roundOff > 0 ? "+" : ""}
-                    {roundOff.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              )}
-
-            {/* Total Row */}
+            </tbody>
             <tfoot>
-              <tr className="border-t-2 border-gray-800 bg-gray-50">
-                <td colSpan={3} className="px-3 py-2 border-r border-gray-200 text-right font-bold text-gray-900">
-                  Grand Total
+              <tr className="border-t border-gray-300 bg-gray-50 font-bold text-xs">
+                <td colSpan={3} className="py-2 px-3 border-r border-gray-300 text-right uppercase text-gray-600">
+                  Total
                 </td>
-                <td className="px-2 py-2 text-center border-r border-gray-200 font-bold text-gray-900">
-                  {totalQty} {mainUnit}
+                <td className="py-2 px-3 border-r border-gray-300 text-right text-gray-900">
+                  {totalQty.toLocaleString("en-IN")} {mainUnit}
                 </td>
-                <td colSpan={4} className="border-r border-gray-200"></td>
-                <td className="px-3 py-2 text-right font-extrabold text-gray-900 text-sm">
+                <td colSpan={3} className="py-2 px-3 border-r border-gray-300"></td>
+                <td className="py-2 px-3 text-right font-mono text-gray-900">
                   {formatCurrency(totalAmount)}
                 </td>
               </tr>
@@ -473,58 +538,302 @@ export default function InvoiceDetailPage() {
           </table>
         </div>
 
-        {/* Amount in Words */}
-        <div className="px-4 py-2 border-t border-b border-gray-300 bg-gray-50/50">
-          <p className="text-[10px] text-gray-500">Amount Chargeable (in words)</p>
-          <p className="text-xs font-bold text-gray-900">
-            {numberToWords(totalAmount)}
-          </p>
+        {/* Calculation & Amount in Words */}
+        <div className="grid grid-cols-2 border-b border-gray-300">
+          <div className="p-4 border-r border-gray-300 flex flex-col justify-between">
+            <div>
+              <div className="text-[10px] uppercase font-bold text-gray-400 mb-1">
+                Amount Chargeable (in words)
+              </div>
+              <div className="text-xs font-bold text-gray-900 italic">
+                {numberToWords(totalAmount)}
+              </div>
+            </div>
+            {invoice.remarks && (
+              <div className="mt-4 text-[11px] text-gray-600">
+                <span className="font-bold">Remarks:</span> {invoice.remarks}
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 text-xs space-y-1.5 bg-gray-50/50">
+            <div className="flex justify-between text-gray-600">
+              <span>Subtotal (Tax-Exclusive):</span>
+              <span className="font-mono font-medium text-gray-900">
+                {formatCurrency(subtotal)}
+              </span>
+            </div>
+            {extraDiscount > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>Extra Discount:</span>
+                <span className="font-mono font-medium">
+                  -{formatCurrency(extraDiscount)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between text-gray-600">
+              <span>Central GST (CGST):</span>
+              <span className="font-mono text-gray-900">{formatCurrency(cgstAmount)}</span>
+            </div>
+            <div className="flex justify-between text-gray-600">
+              <span>State GST (SGST):</span>
+              <span className="font-mono text-gray-900">{formatCurrency(sgstAmount)}</span>
+            </div>
+            {roundOff !== 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>Round Off:</span>
+                <span className="font-mono text-gray-900">
+                  {roundOff > 0 ? `+${roundOff.toFixed(2)}` : roundOff.toFixed(2)}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between pt-2 border-t border-gray-300 text-sm font-bold text-gray-900">
+              <span>Total Invoice Amount:</span>
+              <span className="font-mono text-base text-[#1E3A8A]">
+                {formatCurrency(totalAmount)}
+              </span>
+            </div>
+          </div>
         </div>
 
-        {/* ── Footer: Declaration + Bank + Signature ───────────────── */}
-        <div className="border-t border-gray-300">
-          <div className="grid grid-cols-2">
-            {/* Left: Declaration + Terms */}
-            <div className="p-4 border-r border-gray-300 text-[9px] text-gray-600 leading-relaxed">
-              <p className="font-bold text-gray-700 text-[10px] mb-1 underline">Declaration</p>
-              <p>
-                We declare that this invoice shows the actual price of the goods described
-                and that all particulars are true and correct.
-              </p>
+        {/* Declaration & Bank Details */}
+        <div className="grid grid-cols-2 text-[11px]">
+          <div className="p-4 border-r border-gray-300 space-y-1 text-gray-500">
+            <p className="font-bold text-gray-700 text-[10px] uppercase">Declaration</p>
+            <p>
+              We declare that this invoice shows the actual price of the goods described
+              and that all particulars are true and correct.
+            </p>
+            <p className="font-bold text-gray-700 text-[10px] mt-2 mb-0.5">
+              TERMS &amp; CONDITIONS:
+            </p>
+            <p>1. Goods once sold won&apos;t be taken back without an authorized Credit Note.</p>
+            <p>2. Credit Limit 28 Days Only.</p>
+            <p>3. Subjected to Karnataka Jurisdiction only.</p>
+          </div>
 
-              <p className="font-bold text-gray-700 text-[10px] mt-2 mb-0.5">
-                TERMS &amp; CONDITIONS:
-              </p>
-              <p>1. Goods once sold won&apos;t be taken back.</p>
-              <p>2. Credit Limit 28 Days Only.</p>
-              <p>3. Subjected to Karnataka Jurisdiction only.</p>
+          <div className="p-4 flex flex-col justify-between">
+            <div className="text-[10px] text-gray-600">
+              <p className="font-bold text-gray-700 mb-1">Company&apos;s Bank Details</p>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                <span>Bank Name</span>
+                <span>: <span className="font-bold text-gray-900">{COMPANY.bank.name}</span></span>
+                <span>A/c No.</span>
+                <span>: <span className="font-bold text-gray-900">{COMPANY.bank.accountNo}</span></span>
+                <span>Branch &amp; IFS Code</span>
+                <span>: <span className="font-bold text-gray-900">{COMPANY.bank.branchIfsc}</span></span>
+              </div>
             </div>
 
-            {/* Right: Bank + Signature */}
-            <div className="p-4 flex flex-col justify-between">
-              <div className="text-[10px] text-gray-600">
-                <p className="font-bold text-gray-700 mb-1">Company&apos;s Bank Details</p>
-                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-                  <span>Bank Name</span>
-                  <span>: <span className="font-bold text-gray-900">{COMPANY.bank.name}</span></span>
-                  <span>A/c No.</span>
-                  <span>: <span className="font-bold text-gray-900">{COMPANY.bank.accountNo}</span></span>
-                  <span>Branch &amp; IFS Code</span>
-                  <span>: <span className="font-bold text-gray-900">{COMPANY.bank.branchIfsc}</span></span>
-                </div>
-              </div>
-
-              <div className="text-right mt-6">
-                <p className="text-[10px] font-bold text-gray-700">for {COMPANY.name}</p>
-                <div className="h-8"></div>
-                <p className="text-[9px] text-gray-500 border-t border-gray-300 pt-1 inline-block">
-                  Authorised Signatory
-                </p>
-              </div>
+            <div className="text-right mt-6">
+              <p className="text-[10px] font-bold text-gray-700">for {COMPANY.name}</p>
+              <div className="h-8"></div>
+              <p className="text-[9px] text-gray-500 border-t border-gray-300 pt-1 inline-block">
+                Authorised Signatory
+              </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          Issue Credit Note Modal (Inline for this Invoice)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {showCnModal && invoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-no-print>
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[92vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-foreground">
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-600">
+                  <RotateCcw size={20} />
+                </div>
+                <div>
+                  <h2 className="font-bold text-foreground text-base">
+                    Issue Credit Note for {invoice.invoice_no}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Customer: <strong className="text-foreground">{invoice.customer_name}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCnModal(false)}
+                className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmitCreditNote} className="flex-1 overflow-y-auto p-6 space-y-5">
+              {cnError && (
+                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-600">
+                  <AlertCircle size={16} /> {cnError}
+                </div>
+              )}
+
+              {/* Reason */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  Reason for Return / Credit Note <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={cnReason}
+                  onChange={(e) => setCnReason(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 font-medium"
+                  required
+                >
+                  <option value="Sales Return / Damaged Goods">Damaged / Defective Goods</option>
+                  <option value="Wrong Item Delivered">Wrong Item Delivered</option>
+                  <option value="Customer Excess Stock Return">Customer Excess Stock Return</option>
+                  <option value="Price / Rate Difference">Price / Rate Difference</option>
+                  <option value="Order Cancelled Post Delivery">Order Cancelled Post Delivery</option>
+                  <option value="Other">Other Adjustment</option>
+                </select>
+              </div>
+
+              {/* Items Selection Table */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                  Select Items &amp; Return Quantities
+                </span>
+                <div className="border border-border rounded-xl overflow-hidden bg-card">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/50 border-b border-border font-semibold text-muted-foreground uppercase text-[10px]">
+                      <tr>
+                        <th className="py-2.5 px-3 w-10 text-center">Select</th>
+                        <th className="py-2.5 px-3">Item Name</th>
+                        <th className="py-2.5 px-3 text-center">Invoiced Qty</th>
+                        <th className="py-2.5 px-3 text-right">Return Qty</th>
+                        <th className="py-2.5 px-3 text-right">Rate (₹)</th>
+                        <th className="py-2.5 px-3 text-center">Restock?</th>
+                        <th className="py-2.5 px-3 text-right">Credit Amt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40">
+                      {cnItems.map((item, idx) => {
+                        const itemTotal = item.rate * item.return_qty * (1 + item.gst_rate / 100);
+                        return (
+                          <tr
+                            key={item.product_id}
+                            className={item.selected ? "bg-red-500/[0.03]" : "opacity-60"}
+                          >
+                            <td className="py-2.5 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={item.selected}
+                                onChange={() => handleToggleItem(idx)}
+                                className="rounded border-border text-red-600 focus:ring-red-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 font-medium text-foreground">
+                              {item.product_name}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-muted-foreground">
+                              {item.invoiced_qty}
+                            </td>
+                            <td className="py-2.5 px-3 text-right">
+                              <input
+                                type="number"
+                                min="0.01"
+                                max={item.invoiced_qty}
+                                step="0.01"
+                                value={item.return_qty}
+                                disabled={!item.selected}
+                                onChange={(e) => handleQtyChange(idx, parseFloat(e.target.value) || 0)}
+                                className="w-20 px-2 py-1 text-right text-xs bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-red-500 font-bold"
+                              />
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono">
+                              {item.rate.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 text-center">
+                              <label className="inline-flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={item.restock_inventory}
+                                  disabled={!item.selected}
+                                  onChange={() => handleRestockToggle(idx)}
+                                  className="rounded border-border text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <span className="text-[10px] text-muted-foreground">Yes</span>
+                              </label>
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold font-mono text-red-600">
+                              {item.selected ? fmt(itemTotal) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary */}
+                <div className="bg-muted/30 border border-border rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>
+                      Tax Subtotal: <strong className="text-foreground">{fmt(cnCalculatedTotal.subtotal)}</strong>
+                    </div>
+                    <div>
+                      GST Reversal: <strong className="text-foreground">{fmt(cnCalculatedTotal.gstAmount)}</strong>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs uppercase font-bold text-muted-foreground">
+                      Total Credit Amount
+                    </div>
+                    <div className="text-xl font-bold font-mono text-red-600">
+                      {fmt(cnCalculatedTotal.total)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                  Internal Remarks / Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1 can returned damaged by customer"
+                  value={cnRemarks}
+                  onChange={(e) => setCnRemarks(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                />
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowCnModal(false)}
+                  className="px-4 py-2.5 text-sm font-medium rounded-lg border border-border hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={cnSubmitting || cnCalculatedTotal.total <= 0}
+                  className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                >
+                  {cnSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" /> Generating Credit Note...
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw size={16} /> Confirm &amp; Issue Credit Note
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
