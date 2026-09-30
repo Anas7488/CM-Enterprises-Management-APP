@@ -51,6 +51,7 @@ class Invoice(Base):
 
     items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="invoice")
+    credit_notes = relationship("CreditNote", back_populates="invoice")
 
     def __repr__(self):
         return f"<Invoice {self.invoice_no} (Status: {self.status})>"
