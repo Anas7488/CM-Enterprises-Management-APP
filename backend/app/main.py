@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
     # Auto-create tables on startup if they don't exist yet
     try:
         Base.metadata.create_all(bind=engine)
+        try:
+            from scripts.seed_all import seed_all
+            seed_all()
+        except Exception as seed_err:
+            print(f"[Startup] Auto-seed notice: {seed_err}")
     except Exception as e:
         print(f"[Startup] DB schema creation notice: {e}")
     yield
@@ -39,23 +44,22 @@ app = FastAPI(
 )
 
 # Parse and normalize allowed origins (strip whitespace and trailing slashes)
-raw_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-origins = []
-for o in raw_origins:
-    origins.append(o)
-    if o.endswith("/"):
-        origins.append(o.rstrip("/"))
-    else:
-        origins.append(f"{o}/")
+raw_origins = [o.strip().rstrip("/") for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+origins = list(set(raw_origins))
 
-# Allow localhost by default as fallback
-for default_loc in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+# Always allow standard localhosts and vercel production url as baseline
+for default_loc in [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://cmeenterprisesapplication.vercel.app",
+]:
     if default_loc not in origins:
         origins.append(default_loc)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(set(origins)) if "*" not in raw_origins else ["*"],
+    allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -41,6 +41,7 @@ USERS = [
 
 AREAS = [
     # (area_id, route_number, area_name)
+    #new line
     (1, 1, 'MADHUGIRI'),
     (2, 1, 'KORATAGERE'),
     (3, 1, 'URDIGERE'),
