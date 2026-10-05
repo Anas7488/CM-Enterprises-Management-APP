@@ -24,8 +24,18 @@ def create_invoice(
     Create a new invoice (from an order or standalone).
     Calculates taxes, line totals, adjusts customer balance,
     deducts physical inventory, and links to order if provided.
+    Sales executives can only create invoices for their route customers.
     """
     try:
+        # Validate route scoping for sales executives
+        if current_user.get("role") == "sales_executive":
+            from app.modules.customers.model import Customer
+            from sqlalchemy.orm import joinedload
+            customer = db.query(Customer).options(joinedload(Customer.area)).filter_by(id=payload.customer_id).first()
+            assigned = current_user.get("assigned_route_id")
+            if assigned and customer and customer.area and customer.area.route_id != assigned:
+                raise ValueError("You can only create invoices for customers in your assigned route")
+
         invoice = service.create_invoice(
             db,
             data=payload.model_dump(),
@@ -43,11 +53,13 @@ def list_invoices(
     status: Optional[str] = Query(None, description="Filter by status (unpaid, partially_paid, paid, void)"),
     search: Optional[str] = Query(None, description="Search by invoice no or customer"),
     customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
+    route_id: Optional[int] = Query(None, description="Filter by route ID"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """List all invoices with optional filters."""
-    return service.get_invoices(db, status=status, search=search, customer_id=customer_id)
+    """List all invoices with optional filters. Sales executives see only their route invoices."""
+    user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else route_id
+    return service.get_invoices(db, status=status, search=search, customer_id=customer_id, route_id=user_route)
 
 
 @router.get("/{invoice_id}", response_model=InvoiceOut)

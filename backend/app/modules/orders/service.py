@@ -33,14 +33,17 @@ def _round2(val: Decimal) -> Decimal:
     return Decimal(val).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def create_order(db: Session, data: dict, user_id: int) -> Order:
+def create_order(db: Session, data: dict, user_id: int, user_route_id: Optional[int] = None) -> Order:
     """
     Create a new order with line items.
     Auto-calculates discount, GST, and totals for each item.
     """
-    customer = db.query(Customer).filter_by(id=data["customer_id"]).first()
+    customer = db.query(Customer).options(joinedload(Customer.area)).filter_by(id=data["customer_id"]).first()
     if not customer:
         raise ValueError(f"Customer ID {data['customer_id']} not found")
+
+    if user_route_id and customer.area and customer.area.route_id != user_route_id:
+        raise ValueError("You can only place orders for customers in your assigned route")
 
     order = Order(
         order_no=_next_order_no(db),
@@ -121,8 +124,10 @@ def get_orders(
     status: Optional[str] = None,
     search: Optional[str] = None,
     customer_id: Optional[int] = None,
+    route_id: Optional[int] = None,
 ) -> list:
     """List orders with optional filters."""
+    from app.modules.areas.model import Area
     query = (
         db.query(Order)
         .options(
@@ -137,6 +142,9 @@ def get_orders(
 
     if customer_id:
         query = query.filter(Order.customer_id == customer_id)
+
+    if route_id:
+        query = query.join(Order.customer).join(Customer.area).filter(Area.route_id == route_id)
 
     if search:
         search_term = f"%{search}%"

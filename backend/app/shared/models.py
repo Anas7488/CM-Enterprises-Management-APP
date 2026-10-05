@@ -7,3 +7,6 @@ from app.modules.customers.model import Customer
 from app.modules.orders.model import Order, OrderItem
 from app.modules.invoices.model import Invoice, InvoiceItem
 from app.modules.payments.model import Payment
+from app.modules.credit_notes.model import CreditNote, CreditNoteItem
+from app.modules.vendors.model import Vendor
+from app.modules.debit_notes.model import DebitNote, DebitNoteItem

@@ -25,9 +25,11 @@ def list_payments(
     method: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     customer_id: Optional[int] = Query(None),
+    route_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else route_id
     return service.get_payments(
         db,
         start_date=start_date,
@@ -36,6 +38,7 @@ def list_payments(
         method=method,
         search=search,
         customer_id=customer_id,
+        route_id=user_route,
     )
 
 
@@ -46,7 +49,8 @@ def create_payment(
     current_user: dict = Depends(get_current_user),
 ):
     try:
-        payment = service.create_payment(db, body.model_dump())
+        user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else None
+        payment = service.create_payment(db, body.model_dump(), user_route_id=user_route)
         # Re-fetch with relationships for response
         return service.get_payments(db, search=payment.receipt_no)[0]
     except ValueError as e:

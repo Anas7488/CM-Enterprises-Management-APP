@@ -13,6 +13,8 @@ class UserOut(BaseModel):
     email: str
     role: str
     phone: Optional[str] = None
+    assigned_route_id: Optional[int] = None
+    assigned_route_number: Optional[int] = None
 
     class Config:
         from_attributes = True
