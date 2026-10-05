@@ -36,12 +36,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickLogin = (quickEmail: string) => {
-    setEmail(quickEmail);
-    setPassword("cme@1234");
-    setError("");
-  };
-
   return (
     <div className="relative min-h-screen flex items-center justify-center p-4 bg-gradient-to-tr from-slate-100 via-zinc-50 to-blue-50 dark:from-[#090D1A] dark:via-[#0F172A] dark:to-[#1E293B] overflow-hidden transition-colors duration-300">
       {/* Background ambient glowing spheres */}
@@ -90,7 +84,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
           <div>
             <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 ml-0.5">
               Email Address
@@ -102,6 +96,10 @@ export default function LoginPage() {
               <input
                 type="email"
                 required
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@indopaints.com"
@@ -122,6 +120,7 @@ export default function LoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 required
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -154,31 +153,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        <div className="mt-8 pt-6 border-t border-border/60">
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3 text-center">
-            Quick Login
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: "Anas (Admin)", email: "admin@cmenterprises.com" },
-              { label: "Bakhar (Admin)", email: "bakhar@cmenterprises.com" },
-              { label: "Shambhu (Sales)", email: "shambhu@cmenterprises.com" },
-              { label: "Khayum (Delivery)", email: "khayum@cmenterprises.com" },
-            ].map((role) => (
-              <button
-                key={role.label}
-                type="button"
-                onClick={() => handleQuickLogin(role.email)}
-                className="px-2.5 py-1.5 rounded-lg border border-border/70 bg-background/40 hover:bg-[#F97316]/5 hover:border-[#F97316]/30 text-[10px] font-semibold text-foreground hover:text-[#F97316] transition-all cursor-pointer"
-                disabled={loading || success}
-              >
-                {role.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-[9px] text-muted-foreground text-center mt-2">Default password: <span className="font-mono font-bold">cme@1234</span></p>
-        </div>
       </div>
     </div>
   );
