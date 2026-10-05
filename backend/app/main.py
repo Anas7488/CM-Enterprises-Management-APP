@@ -25,6 +25,11 @@ async def lifespan(app: FastAPI):
     # Auto-create tables on startup if they don't exist yet
     try:
         Base.metadata.create_all(bind=engine)
+        try:
+            from scripts.seed_all import seed_all
+            seed_all()
+        except Exception as seed_err:
+            print(f"[Startup] Auto-seed notice: {seed_err}")
     except Exception as e:
         print(f"[Startup] DB schema creation notice: {e}")
     yield
