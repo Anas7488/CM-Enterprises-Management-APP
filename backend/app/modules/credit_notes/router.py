@@ -38,11 +38,13 @@ def create_credit_note(
 def list_credit_notes(
     search: Optional[str] = Query(None, description="Search by credit note no, invoice, customer or reason"),
     customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
+    route_id: Optional[int] = Query(None, description="Filter by route ID"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """List all credit notes."""
-    return service.get_credit_notes(db, search=search, customer_id=customer_id)
+    """List all credit notes. Sales executives see only their route credit notes."""
+    user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else route_id
+    return service.get_credit_notes(db, search=search, customer_id=customer_id, route_id=user_route)
 
 
 @router.get("/{credit_note_id}", response_model=CreditNoteOut)

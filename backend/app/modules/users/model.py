@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, Enum, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 import enum
@@ -23,6 +24,9 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
 
     role = Column(Enum(UserRole), nullable=False, default=UserRole.SALES_EXECUTIVE)
+
+    assigned_route_id = Column(Integer, ForeignKey("routes.id"), nullable=True)
+    assigned_route = relationship("Route")
 
     is_active = Column(Boolean, nullable=False, default=True)
 

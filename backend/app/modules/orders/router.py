@@ -27,10 +27,12 @@ def create_order(
     Requires authentication.
     """
     try:
+        user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else None
         order = service.create_order(
             db,
             data=payload.model_dump(),
             user_id=current_user["id"],
+            user_route_id=user_route,
         )
         return service.get_order_by_id(db, order.id)
     except ValueError as e:
@@ -42,11 +44,13 @@ def list_orders(
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search by order no or customer"),
     customer_id: Optional[int] = Query(None, description="Filter by customer ID"),
+    route_id: Optional[int] = Query(None, description="Filter by route ID"),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
     """List all orders with optional filters. Requires authentication."""
-    return service.get_orders(db, status=status, search=search, customer_id=customer_id)
+    user_route = current_user.get("assigned_route_id") if current_user.get("role") == "sales_executive" else route_id
+    return service.get_orders(db, status=status, search=search, customer_id=customer_id, route_id=user_route)
 
 
 @router.get("/{order_id}", response_model=OrderOut)

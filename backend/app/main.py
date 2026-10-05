@@ -15,6 +15,8 @@ from app.modules.credit_notes.router import router as credit_notes_router
 from app.modules.vendors.router import router as vendors_router
 from app.modules.debit_notes.router import router as debit_notes_router
 
+from app.modules.areas.router import router as areas_router
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -35,6 +37,7 @@ app.add_middleware(
 # ── Routers ────────────────────────────────────────────────────────────────
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
+app.include_router(areas_router, prefix="/areas", tags=["Areas & Routes"])
 app.include_router(customers_router, prefix="/customers", tags=["Customers"])
 app.include_router(vendors_router, prefix="/vendors", tags=["Vendors"])
 app.include_router(inventory_router, prefix="/inventory", tags=["Inventory"])

@@ -31,7 +31,7 @@ def _next_receipt_no(db: Session) -> str:
 
 # ── Create payment ────────────────────────────────────────────────────────────
 
-def create_payment(db: Session, data: dict) -> Payment:
+def create_payment(db: Session, data: dict, user_route_id: Optional[int] = None) -> Payment:
     """
     Record a collection (payment received):
     1. Reduce customer outstanding_balance by the amount collected.
@@ -47,9 +47,12 @@ def create_payment(db: Session, data: dict) -> Payment:
     notes = data.get("notes")
 
     # Validate customer
-    customer = db.query(Customer).filter_by(id=customer_id).first()
+    customer = db.query(Customer).options(joinedload(Customer.area)).filter_by(id=customer_id).first()
     if not customer:
         raise ValueError(f"Customer #{customer_id} not found")
+
+    if user_route_id and customer.area and customer.area.route_id != user_route_id:
+        raise ValueError("You can only record payments for customers in your assigned route")
 
     # Validate payment method
     if payment_method_str not in PaymentMethod.ALL:
@@ -104,7 +107,9 @@ def get_payments(
     method: Optional[str] = None,
     search: Optional[str] = None,
     customer_id: Optional[int] = None,
+    route_id: Optional[int] = None,
 ) -> list[Payment]:
+    from app.modules.areas.model import Area
     q = db.query(Payment).options(
         joinedload(Payment.customer),
         joinedload(Payment.invoice),
@@ -120,6 +125,8 @@ def get_payments(
         q = q.filter(Payment.payment_method == method)
     if customer_id:
         q = q.filter(Payment.customer_id == customer_id)
+    if route_id:
+        q = q.join(Payment.customer).join(Customer.area).filter(Area.route_id == route_id)
     if search:
         q = q.join(Payment.customer).filter(
             Customer.shop_name.ilike(f"%{search}%")

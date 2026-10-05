@@ -166,8 +166,11 @@ def get_credit_notes(
     db: Session,
     search: Optional[str] = None,
     customer_id: Optional[int] = None,
+    route_id: Optional[int] = None,
 ) -> list:
     """List all credit notes."""
+    from app.modules.areas.model import Area
+
     query = (
         db.query(CreditNote)
         .options(
@@ -180,6 +183,9 @@ def get_credit_notes(
 
     if customer_id:
         query = query.filter(CreditNote.customer_id == customer_id)
+
+    if route_id:
+        query = query.join(CreditNote.customer).join(Customer.area).filter(Area.route_id == route_id)
 
     if search:
         s = f"%{search}%"

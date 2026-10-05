@@ -1,10 +1,12 @@
-// ─── Types ─────────────────────────────────────────────────────────────────
 export interface User {
   id: number;
   name: string;
   email: string;
   role: "admin" | "sales_executive" | "delivery_executive" | "accountant";
   phone?: string;
+  assigned_route_id?: number | null;
+  assigned_route_number?: number | null;
+  is_active?: boolean;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";

@@ -195,8 +195,11 @@ def get_invoices(
     status: Optional[str] = None,
     search: Optional[str] = None,
     customer_id: Optional[int] = None,
+    route_id: Optional[int] = None,
 ) -> list:
     """List invoices with filters."""
+    from app.modules.areas.model import Area
+
     query = (
         db.query(Invoice)
         .options(
@@ -212,6 +215,9 @@ def get_invoices(
 
     if customer_id:
         query = query.filter(Invoice.customer_id == customer_id)
+
+    if route_id:
+        query = query.join(Invoice.customer).join(Customer.area).filter(Area.route_id == route_id)
 
     if search:
         s = f"%{search}%"

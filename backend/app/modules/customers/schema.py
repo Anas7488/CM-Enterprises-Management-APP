@@ -36,3 +36,25 @@ class CustomerOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CustomerCreate(BaseModel):
+    shop_name: str
+    area_id: int
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    credit_limit: Optional[Decimal] = Decimal("0.00")
+    opening_balance: Optional[Decimal] = Decimal("0.00")
+
+
+class CustomerUpdate(BaseModel):
+    shop_name: Optional[str] = None
+    area_id: Optional[int] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    gstin: Optional[str] = None
+    address: Optional[str] = None
+    credit_limit: Optional[Decimal] = None
+    is_active: Optional[bool] = None
