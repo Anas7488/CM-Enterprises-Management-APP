@@ -1,6 +1,8 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.database import Base, engine
 import app.shared.models
 
 from app.modules.auth.router import router as auth_router
@@ -17,18 +19,43 @@ from app.modules.debit_notes.router import router as debit_notes_router
 
 from app.modules.areas.router import router as areas_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Auto-create tables on startup if they don't exist yet
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"[Startup] DB schema creation notice: {e}")
+    yield
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
-origins = [origin.strip() for origin in settings.ALLOWED_ORIGINS.split(",")]
+# Parse and normalize allowed origins (strip whitespace and trailing slashes)
+raw_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
+origins = []
+for o in raw_origins:
+    origins.append(o)
+    if o.endswith("/"):
+        origins.append(o.rstrip("/"))
+    else:
+        origins.append(f"{o}/")
+
+# Allow localhost by default as fallback
+for default_loc in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+    if default_loc not in origins:
+        origins.append(default_loc)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=list(set(origins)) if "*" not in raw_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

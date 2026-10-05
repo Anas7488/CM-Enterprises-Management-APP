@@ -74,8 +74,12 @@ def run_migrations_online() -> None:
     from app.core.config import settings
     from sqlalchemy import create_engine
 
+    db_url = settings.DATABASE_URL
+    if db_url and db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
     connectable = create_engine(
-        settings.DATABASE_URL,
+        db_url,
         poolclass=pool.NullPool,
     )
 
