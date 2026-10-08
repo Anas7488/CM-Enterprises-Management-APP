@@ -911,12 +911,17 @@ def seed_categories(db):
 def seed_products_and_inventory(db):
     from app.modules.products.model import Product, ProductCategory, ProductGroup
     from app.modules.inventory.model import Inventory
+    from app.modules.orders.model import OrderItem
+    from app.modules.invoices.model import InvoiceItem
+    from app.modules.credit_notes.model import CreditNoteItem
+    from app.modules.debit_notes.model import DebitNoteItem
     from scripts.catalog_data import PRODUCTS_AND_INVENTORY
 
     all_categories = {c.code: c for c in db.query(ProductCategory).all()}
 
+    synced_product_ids = set()
     prod_created = 0
-    prod_skipped = 0
+    prod_updated = 0
     inv_created = 0
 
     for (
@@ -966,7 +971,15 @@ def seed_products_and_inventory(db):
             db.flush()
             prod_created += 1
         else:
-            prod_skipped += 1
+            product.is_active = is_active
+            product.mrp = mrp
+            if dealer_price is not None:
+                product.dealer_price = dealer_price
+            if pcs_per_carton is not None:
+                product.pcs_per_carton = pcs_per_carton
+            prod_updated += 1
+
+        synced_product_ids.add(product.id)
 
         existing_inv = db.query(Inventory).filter_by(product_id=product.id).first()
         if not existing_inv:
@@ -979,8 +992,30 @@ def seed_products_and_inventory(db):
             db.add(inv)
             inv_created += 1
 
+    # Clean up obsolete or commented-out products
+    used_pids = set(
+        [oi.product_id for oi in db.query(OrderItem).all()] +
+        [ii.product_id for ii in db.query(InvoiceItem).all()] +
+        [cni.product_id for cni in db.query(CreditNoteItem).all()] +
+        [dni.product_id for dni in db.query(DebitNoteItem).filter(DebitNoteItem.product_id.isnot(None)).all()]
+    )
+
+    all_db_products = db.query(Product).all()
+    deleted_count = 0
+    deactivated_count = 0
+
+    for p in all_db_products:
+        if p.id not in synced_product_ids:
+            if p.id in used_pids:
+                p.is_active = 0  # Soft deactivate if tied to previous invoices
+                deactivated_count += 1
+            else:
+                db.query(Inventory).filter_by(product_id=p.id).delete()
+                db.delete(p)
+                deleted_count += 1
+
     db.commit()
-    print(f"  Products: {prod_created} created, {prod_skipped} skipped")
+    print(f"  Products: {prod_created} created, {prod_updated} updated, {deleted_count} removed, {deactivated_count} deactivated")
     print(f"  Inventory: {inv_created} created")
 
 
