@@ -97,8 +97,8 @@ export default function ProductsPage() {
     try {
       setLoading(true);
       const [catRes, prodRes] = await Promise.all([
-        authFetch("/products/categories"),
-        authFetch("/products"),
+        authFetch("/products/categories/"),
+        authFetch("/products/"),
       ]);
 
       if (!catRes.ok || !prodRes.ok) {
@@ -448,11 +448,10 @@ export default function ProductsPage() {
         <div className="flex gap-2 overflow-x-auto pb-1">
           <button
             onClick={() => setActiveCategory("All")}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${
-              activeCategory === "All"
-                ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
-                : "bg-background text-muted-foreground border-border hover:bg-muted"
-            }`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${activeCategory === "All"
+              ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
+              : "bg-background text-muted-foreground border-border hover:bg-muted"
+              }`}
           >
             All
           </button>
@@ -460,11 +459,10 @@ export default function ProductsPage() {
             <button
               key={c.code}
               onClick={() => setActiveCategory(c.code)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${
-                activeCategory === c.code
-                  ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
-                  : "bg-background text-muted-foreground border-border hover:bg-muted"
-              }`}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${activeCategory === c.code
+                ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
+                : "bg-background text-muted-foreground border-border hover:bg-muted"
+                }`}
             >
               {c.code} {c.name}
             </button>
@@ -525,9 +523,8 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span
-                      className={`text-xs font-semibold ${
-                        p.stock < 10 ? "text-red-500" : p.stock < 30 ? "text-amber-600" : "text-emerald-600"
-                      }`}
+                      className={`text-xs font-semibold ${p.stock < 10 ? "text-red-500" : p.stock < 30 ? "text-amber-600" : "text-emerald-600"
+                        }`}
                     >
                       {p.stock} {p.unit}
                     </span>
@@ -624,22 +621,20 @@ export default function ProductsPage() {
                     <button
                       type="button"
                       onClick={() => setAddProductType("shaded")}
-                      className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                        addProductType === "shaded"
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
-                      }`}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${addProductType === "shaded"
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        }`}
                     >
                       🎨 Shaded (Paints/Emulsion)
                     </button>
                     <button
                       type="button"
                       onClick={() => setAddProductType("variant")}
-                      className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${
-                        addProductType === "variant"
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
-                      }`}
+                      className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${addProductType === "variant"
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        }`}
                     >
                       🛠️ Variant (Brushes/Hardware)
                     </button>
@@ -841,11 +836,10 @@ export default function ProductsPage() {
                           key={r}
                           type="button"
                           onClick={() => setAddGst(r)}
-                          className={`flex-1 py-2 rounded-lg border text-xs font-bold transition-all ${
-                            addGst === r
-                              ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                              : "border-border bg-background text-muted-foreground hover:bg-muted/50"
-                          }`}
+                          className={`flex-1 py-2 rounded-lg border text-xs font-bold transition-all ${addGst === r
+                            ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted/50"
+                            }`}
                         >
                           {r}%
                         </button>
@@ -942,11 +936,10 @@ export default function ProductsPage() {
                         </td>
                         <td className="px-3 py-2.5">
                           <span
-                            className={`font-mono text-xs px-2 py-0.5 rounded ${
-                              isPlaceholder
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                            }`}
+                            className={`font-mono text-xs px-2 py-0.5 rounded ${isPlaceholder
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              }`}
                           >
                             {cat.hsn_code || "—"}
                           </span>
@@ -1053,11 +1046,10 @@ export default function ProductsPage() {
                       key={r}
                       type="button"
                       onClick={() => setEditGst(r)}
-                      className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${
-                        editGst === r
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted/50"
-                      }`}
+                      className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${editGst === r
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted/50"
+                        }`}
                     >
                       {r}%
                     </button>

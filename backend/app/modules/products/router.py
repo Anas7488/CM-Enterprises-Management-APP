@@ -9,7 +9,8 @@ from app.modules.products import service
 router = APIRouter()
 
 
-@router.get("/categories", response_model=List[CategoryOut])
+@router.get("/categories", response_model=List[CategoryOut], include_in_schema=False)
+@router.get("/categories/", response_model=List[CategoryOut])
 def get_categories(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
@@ -32,6 +33,7 @@ def update_category(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("", response_model=List[ProductOut], include_in_schema=False)
 @router.get("/", response_model=List[ProductOut])
 def get_products(
     db: Session = Depends(get_db),
