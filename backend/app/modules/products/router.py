@@ -9,7 +9,7 @@ from app.modules.products import service
 router = APIRouter()
 
 
-@router.get("/categories", response_model=List[CategoryOut])
+@router.get("/categories/", response_model=List[CategoryOut])
 def get_categories(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
