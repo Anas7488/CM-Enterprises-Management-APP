@@ -97,7 +97,7 @@ export default function ProductsPage() {
     try {
       setLoading(true);
       const [catRes, prodRes] = await Promise.all([
-        authFetch("/products/categories/"),
+        authFetch("/products/categories"),
         authFetch("/products/"),
       ]);
 
@@ -449,8 +449,8 @@ export default function ProductsPage() {
           <button
             onClick={() => setActiveCategory("All")}
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${activeCategory === "All"
-                ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
-                : "bg-background text-muted-foreground border-border hover:bg-muted"
+              ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
+              : "bg-background text-muted-foreground border-border hover:bg-muted"
               }`}
           >
             All
@@ -460,8 +460,8 @@ export default function ProductsPage() {
               key={c.code}
               onClick={() => setActiveCategory(c.code)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap border ${activeCategory === c.code
-                  ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
-                  : "bg-background text-muted-foreground border-border hover:bg-muted"
+                ? "bg-[#1E3A8A] text-white border-[#1E3A8A]"
+                : "bg-background text-muted-foreground border-border hover:bg-muted"
                 }`}
             >
               {c.code} {c.name}
@@ -622,8 +622,8 @@ export default function ProductsPage() {
                       type="button"
                       onClick={() => setAddProductType("shaded")}
                       className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${addProductType === "shaded"
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted"
                         }`}
                     >
                       🎨 Shaded (Paints/Emulsion)
@@ -632,8 +632,8 @@ export default function ProductsPage() {
                       type="button"
                       onClick={() => setAddProductType("variant")}
                       className={`flex-1 py-2 rounded-lg border text-xs font-semibold transition-all ${addProductType === "variant"
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted"
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted"
                         }`}
                     >
                       🛠️ Variant (Brushes/Hardware)
@@ -837,8 +837,8 @@ export default function ProductsPage() {
                           type="button"
                           onClick={() => setAddGst(r)}
                           className={`flex-1 py-2 rounded-lg border text-xs font-bold transition-all ${addGst === r
-                              ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                              : "border-border bg-background text-muted-foreground hover:bg-muted/50"
+                            ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                            : "border-border bg-background text-muted-foreground hover:bg-muted/50"
                             }`}
                         >
                           {r}%
@@ -937,8 +937,8 @@ export default function ProductsPage() {
                         <td className="px-3 py-2.5">
                           <span
                             className={`font-mono text-xs px-2 py-0.5 rounded ${isPlaceholder
-                                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                               }`}
                           >
                             {cat.hsn_code || "—"}
@@ -1047,8 +1047,8 @@ export default function ProductsPage() {
                       type="button"
                       onClick={() => setEditGst(r)}
                       className={`flex-1 py-2 rounded-lg border text-sm font-bold transition-all ${editGst === r
-                          ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
-                          : "border-border bg-background text-muted-foreground hover:bg-muted/50"
+                        ? "border-[#1E3A8A] bg-[#1E3A8A]/10 text-[#1E3A8A]"
+                        : "border-border bg-background text-muted-foreground hover:bg-muted/50"
                         }`}
                     >
                       {r}%
