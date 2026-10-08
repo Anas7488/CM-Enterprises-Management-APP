@@ -38,25 +38,25 @@ export default function InventoryPage() {
   useEffect(() => {
     async function loadInventory() {
       try {
-        const res = await authFetch("/inventory");
+        const res = await authFetch("/inventory/");
         if (!res.ok) {
           throw new Error("Failed to load inventory levels from backend.");
         }
         const data = await res.json();
-        
+
         // Map backend schema to existing frontend structure
         const mapped: InventoryItem[] = data.map((item: any) => {
           const physical = item.physical_qty || 0;
           const reserved = item.reserved_qty || 0;
           const available = item.available_qty || 0;
           const reorder = item.product?.reorder_level || 0;
-          
+
           // Determine status based on reorder thresholds
           let status: "good" | "low" | "critical" = "good";
           if (available <= reorder) {
             status = available <= 5 ? "critical" : "low";
           }
-          
+
           return {
             id: String(item.id),
             sku: item.product?.shade_code || item.product?.variant_code || String(item.product?.id || ""),
@@ -71,7 +71,7 @@ export default function InventoryPage() {
             status: status
           };
         });
-        
+
         setInventory(mapped);
       } catch (err: any) {
         setError(err.message || "Cannot connect to server. Is the backend running?");
@@ -91,11 +91,11 @@ export default function InventoryPage() {
   // 2. Filter by local search term and dropdown filters
   const filteredInventory = useMemo(() => {
     return dateFiltered.filter((item) => {
-      const matchesSearch = 
+      const matchesSearch =
         item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.category.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesCategory = selectedCategory ? item.category === selectedCategory : true;
       const matchesStatus = selectedStatus ? item.status === selectedStatus : true;
 
@@ -196,7 +196,7 @@ export default function InventoryPage() {
             />
           </div>
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-foreground bg-background border border-border/60 rounded-lg hover:bg-muted transition-all"
             >
@@ -206,13 +206,13 @@ export default function InventoryPage() {
                 <span className="w-2 h-2 rounded-full bg-[#F97316]" />
               )}
             </button>
-            
+
             {showFilters && (
               <div className="absolute right-0 top-12 w-64 bg-card border border-border rounded-xl shadow-xl z-50 p-4 space-y-4">
                 <div>
                   <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Category</label>
-                  <select 
-                    value={selectedCategory || ""} 
+                  <select
+                    value={selectedCategory || ""}
                     onChange={(e) => setSelectedCategory(e.target.value || null)}
                     className="w-full bg-muted border border-border/60 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1E3A8A]/40"
                   >
@@ -224,8 +224,8 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Status</label>
-                  <select 
-                    value={selectedStatus || ""} 
+                  <select
+                    value={selectedStatus || ""}
                     onChange={(e) => setSelectedStatus(e.target.value || null)}
                     className="w-full bg-muted border border-border/60 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1E3A8A]/40"
                   >
@@ -237,7 +237,7 @@ export default function InventoryPage() {
                 </div>
                 <div className="pt-2 flex justify-between items-center border-t border-border/50">
                   <span className="text-xs text-muted-foreground font-medium">{filteredInventory.length} results</span>
-                  <button 
+                  <button
                     onClick={() => { setSelectedCategory(null); setSelectedStatus(null); }}
                     className="text-xs text-red-500 hover:text-red-600 font-medium transition-colors"
                   >
