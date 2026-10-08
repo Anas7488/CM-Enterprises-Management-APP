@@ -97,7 +97,7 @@ export default function ProductsPage() {
     try {
       setLoading(true);
       const [catRes, prodRes] = await Promise.all([
-        authFetch("/products/categories"),
+        authFetch("/products/categories/"),
         authFetch("/products/"),
       ]);
 
