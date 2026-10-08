@@ -12,6 +12,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import app.shared.models
 from app.core.database import SessionLocal
 from app.modules.areas.model import Route, Area, RouteType
 from app.modules.users.model import User, UserRole
@@ -882,6 +883,107 @@ def seed_customers(db):
     print(f"  Customers: {created} created, {skipped} skipped, {not_found} area not found")
 
 
+def seed_categories(db):
+    from app.modules.products.model import ProductCategory, ProductGroup
+    from scripts.catalog_data import CATEGORIES
+
+    created = 0
+    skipped = 0
+    for code, name, group, hsn_code, gst_rate, size_range in CATEGORIES:
+        existing = db.query(ProductCategory).filter_by(code=code).first()
+        if existing:
+            skipped += 1
+            continue
+        category = ProductCategory(
+            code=code,
+            name=name,
+            group=ProductGroup(group),
+            hsn_code=hsn_code,
+            gst_rate=gst_rate,
+            size_range=size_range,
+        )
+        db.add(category)
+        created += 1
+    db.commit()
+    print(f"  Categories: {created} created, {skipped} skipped")
+
+
+def seed_products_and_inventory(db):
+    from app.modules.products.model import Product, ProductCategory, ProductGroup
+    from app.modules.inventory.model import Inventory
+    from scripts.catalog_data import PRODUCTS_AND_INVENTORY
+
+    all_categories = {c.code: c for c in db.query(ProductCategory).all()}
+
+    prod_created = 0
+    prod_skipped = 0
+    inv_created = 0
+
+    for (
+        cat_code,
+        group,
+        shade_name,
+        shade_code,
+        variant_code,
+        variant_name,
+        size,
+        unit,
+        mrp,
+        dealer_price,
+        pcs_per_carton,
+        reorder_level,
+        is_active,
+        qty
+    ) in PRODUCTS_AND_INVENTORY:
+        category = all_categories.get(cat_code)
+        if not category:
+            continue
+
+        query = db.query(Product).filter_by(category_id=category.id, size=size)
+        if group == "shaded":
+            query = query.filter_by(shade_name=shade_name or None, shade_code=shade_code or None)
+        else:
+            query = query.filter_by(variant_code=variant_code or None, variant_name=variant_name or None)
+
+        product = query.first()
+        if not product:
+            product = Product(
+                category_id=category.id,
+                product_type=ProductGroup(group),
+                shade_name=shade_name or None,
+                shade_code=shade_code or None,
+                variant_code=variant_code or None,
+                variant_name=variant_name or None,
+                size=size,
+                unit=unit,
+                mrp=mrp,
+                dealer_price=dealer_price,
+                pcs_per_carton=pcs_per_carton,
+                reorder_level=reorder_level,
+                is_active=is_active,
+            )
+            db.add(product)
+            db.flush()
+            prod_created += 1
+        else:
+            prod_skipped += 1
+
+        existing_inv = db.query(Inventory).filter_by(product_id=product.id).first()
+        if not existing_inv:
+            inv = Inventory(
+                product_id=product.id,
+                physical_qty=qty,
+                reserved_qty=0,
+                available_qty=qty
+            )
+            db.add(inv)
+            inv_created += 1
+
+    db.commit()
+    print(f"  Products: {prod_created} created, {prod_skipped} skipped")
+    print(f"  Inventory: {inv_created} created")
+
+
 def seed_all():
     db = SessionLocal()
     try:
@@ -891,6 +993,8 @@ def seed_all():
         seed_areas(db)
         seed_users(db)
         seed_customers(db)
+        seed_categories(db)
+        seed_products_and_inventory(db)
         print("  " + "─" * 40)
         print("  ✅ All data seeded successfully!\n")
     except Exception as e:
