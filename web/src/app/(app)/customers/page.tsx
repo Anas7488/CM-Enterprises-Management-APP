@@ -27,12 +27,12 @@ export default function CustomersPage() {
   useEffect(() => {
     async function loadCustomers() {
       try {
-        const res = await authFetch("/customers");
+        const res = await authFetch("/customers/");
         if (!res.ok) {
           throw new Error("Failed to load customer list from backend.");
         }
         const data = await res.json();
-        
+
         // Map backend schema to existing frontend structure
         const mapped: Customer[] = data.map((c: any) => ({
           id: c.id,
@@ -45,7 +45,7 @@ export default function CustomersPage() {
           creditLimit: Number(c.credit_limit) || 0,
           outstanding: Number(c.outstanding_balance) || 0,
         }));
-        
+
         setCustomers(mapped);
       } catch (err: any) {
         setError(err.message || "Cannot connect to server. Is the backend running?");
@@ -59,12 +59,12 @@ export default function CustomersPage() {
   const filtered = customers.filter((c) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    
+
     // Split search query into space-separated keywords
     const keywords = q.split(/\s+/).filter(Boolean);
-    
+
     // Every keyword in the query must match at least one field in the customer profile
-    return keywords.every((keyword) => 
+    return keywords.every((keyword) =>
       c.shopName.toLowerCase().includes(keyword) ||
       c.city.toLowerCase().includes(keyword) ||
       c.areaCode.toLowerCase().includes(keyword) ||
@@ -149,9 +149,8 @@ export default function CustomersPage() {
               <div>
                 <p className="text-[10px] text-muted-foreground">Outstanding</p>
                 <p
-                  className={`text-sm font-bold ${
-                    c.outstanding > 0 ? "text-red-500" : "text-emerald-600"
-                  }`}
+                  className={`text-sm font-bold ${c.outstanding > 0 ? "text-red-500" : "text-emerald-600"
+                    }`}
                 >
                   {fmt(c.outstanding)}
                 </p>
