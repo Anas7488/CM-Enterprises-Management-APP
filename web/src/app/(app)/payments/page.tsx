@@ -192,7 +192,7 @@ function CollectionsContent() {
 
       const [pmtRes, sumRes, custRes] = await Promise.all([
         authFetch(`/payments/?${params}`),
-        authFetch("/payments/summary"),
+        authFetch("/payments/summary/"),
         authFetch("/customers/"),
       ]);
 

@@ -96,7 +96,7 @@ export default function UsersPage() {
     try {
       const [usersRes, routesRes] = await Promise.all([
         authFetch("/users/"),
-        authFetch("/areas/routes"),
+        authFetch("/areas/routes/"),
       ]);
 
       if (!usersRes.ok) throw new Error("Failed to load users list");
