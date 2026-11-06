@@ -75,4 +75,87 @@ body {
   background-color: var(--background);
   color: var(--foreground);
   transition: background-color 0.2s ease, color 0.2s ease;
+  /* Prevent horizontal overflow on mobile */
+  overflow-x: hidden;
+  /* Better font rendering on mobile */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Mobile safe area support ─────────────────────────────────────── */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─── Better touch targets for mobile ──────────────────────────────── */
+@media (max-width: 768px) {
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent double-tap zoom on inputs */
+  input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Tighten vertical page spacing */
+  .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+  .space-y-5 > * + * {
+    margin-top: 0.875rem !important;
+  }
+
+  /* Shrink page h1 headings */
+  h1 {
+    font-size: 1.125rem !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Smooth scrolling everywhere on mobile */
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* ─── Responsive table wrapper ──────────────────────────────────────── */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+}
+
+/* ─── Fade-in animation ──────────────────────────────────────────────── */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.25s ease forwards;
+}
+
+/* ─── Custom scrollbar for webkit browsers ───────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.6);
 }

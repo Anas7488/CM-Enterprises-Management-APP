@@ -20,6 +20,7 @@ import {
   X,
   Package,
   FileText,
+  Pencil,
 } from "lucide-react";
 import { KpiCard } from "@/shared/ui/KpiCard";
 import { formatCurrencyShort, formatDate } from "@/modules/invoices/data";
@@ -100,8 +101,9 @@ export default function PurchasesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState("");
 
-  // ── Create Vendor Modal State ───────────────────────────────────────────
+  // ── Create/Edit Vendor Modal State ─────────────────────────────────────
   const [showVendorModal, setShowVendorModal] = useState(false);
+  const [editingVendorId, setEditingVendorId] = useState<number | null>(null);
   const [vendorName, setVendorName] = useState("");
   const [vendorContact, setVendorContact] = useState("");
   const [vendorPhone, setVendorPhone] = useState("");
@@ -111,6 +113,32 @@ export default function PurchasesPage() {
   const [vendorOpening, setVendorOpening] = useState("0");
   const [vendorSaving, setVendorSaving] = useState(false);
   const [vendorError, setVendorError] = useState("");
+
+  const handleOpenAddVendor = () => {
+    setEditingVendorId(null);
+    setVendorError("");
+    setVendorName("");
+    setVendorContact("");
+    setVendorPhone("");
+    setVendorEmail("");
+    setVendorGstin("");
+    setVendorAddress("");
+    setVendorOpening("0");
+    setShowVendorModal(true);
+  };
+
+  const handleOpenEditVendor = (v: VendorItem) => {
+    setEditingVendorId(v.id);
+    setVendorError("");
+    setVendorName(v.name || "");
+    setVendorContact(v.contact_person || "");
+    setVendorPhone(v.phone || "");
+    setVendorEmail(v.email || "");
+    setVendorGstin(v.gstin || "");
+    setVendorAddress(v.address || "");
+    setVendorOpening(String(v.opening_balance ?? 0));
+    setShowVendorModal(true);
+  };
 
   // ── Manual Issue Debit Note Modal State ──────────────────────────────────
   const [showDnModal, setShowDnModal] = useState(false);
@@ -338,7 +366,7 @@ export default function PurchasesPage() {
     }
   };
 
-  // Submit Add Vendor
+  // Submit Add or Edit Vendor
   const handleSaveVendor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendorName.trim()) {
@@ -360,19 +388,23 @@ export default function PurchasesPage() {
         opening_balance: parseFloat(vendorOpening) || 0,
       };
 
-      const res = await authFetch("/vendors/", {
-        method: "POST",
+      const url = editingVendorId ? `/vendors/${editingVendorId}/` : "/vendors/";
+      const method = editingVendorId ? "PUT" : "POST";
+
+      const res = await authFetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || "Failed to create vendor");
+        throw new Error(data.detail || `Failed to ${editingVendorId ? "update" : "create"} vendor`);
       }
 
-      const created = await res.json();
+      const saved = await res.json();
       setShowVendorModal(false);
+      setEditingVendorId(null);
       setVendorName("");
       setVendorContact("");
       setVendorPhone("");
@@ -381,11 +413,11 @@ export default function PurchasesPage() {
       setVendorAddress("");
       setVendorOpening("0");
       loadData();
-      if (showDnModal) {
-        setSelectedVendorId(created.id);
+      if (showDnModal && !editingVendorId) {
+        setSelectedVendorId(saved.id);
       }
     } catch (err: any) {
-      setVendorError(err.message || "Failed to create vendor");
+      setVendorError(err.message || `Failed to ${editingVendorId ? "update" : "create"} vendor`);
     } finally {
       setVendorSaving(false);
     }
@@ -473,7 +505,7 @@ export default function PurchasesPage() {
             <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
           </button>
           <button
-            onClick={() => setShowVendorModal(true)}
+            onClick={handleOpenAddVendor}
             className="flex items-center gap-2 border border-border bg-card hover:bg-muted text-foreground text-sm font-semibold px-4 py-2 rounded-lg transition-all"
           >
             <Building2 size={16} />
@@ -529,7 +561,7 @@ export default function PurchasesPage() {
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 md:gap-4">
         <KpiCard
           icon={RotateCcw}
           label="Total Debit Notes"
@@ -724,8 +756,9 @@ export default function PurchasesPage() {
                     <th className="px-6 py-3">Phone &amp; Email</th>
                     <th className="px-6 py-3">GSTIN</th>
                     <th className="px-6 py-3">Location</th>
+                    <th className="px-6 py-3 text-right">Opening Balance</th>
                     <th className="px-6 py-3 text-right">Outstanding Payable</th>
-                    <th className="px-6 py-3 text-right">Action</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
@@ -759,24 +792,41 @@ export default function PurchasesPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {fmt(v.opening_balance)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
                           <span className="font-bold text-foreground text-xs">
                             {fmt(v.outstanding_payable)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleOpenDebitNoteModal(v.id)}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-[#1E3A8A]/10 text-[#1E3A8A] hover:bg-[#1E3A8A]/20 text-xs font-semibold rounded-md transition-colors"
-                          >
-                            <RotateCcw size={12} /> Return Items
-                          </button>
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditVendor(v)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#1E3A8A] bg-[#1E3A8A]/10 hover:bg-[#1E3A8A]/20 rounded-md transition-colors"
+                              title="Edit Vendor Details & Opening Balance"
+                            >
+                              <Pencil size={12} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDebitNoteModal(v.id)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 text-xs font-semibold rounded-md transition-colors"
+                              title="Issue Debit Note for Vendor"
+                            >
+                              <RotateCcw size={12} /> Return Items
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
                       <td
-                        colSpan={7}
+                        colSpan={8}
                         className="px-6 py-12 text-center text-muted-foreground text-sm"
                       >
                         {searchTerm
@@ -1107,13 +1157,17 @@ export default function PurchasesPage() {
           <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between p-5 border-b border-border bg-muted/20">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Building2 size={20} />
+                <div className="w-10 h-10 rounded-xl bg-[#1E3A8A]/10 flex items-center justify-center text-[#1E3A8A]">
+                  {editingVendorId ? <Pencil size={20} /> : <Building2 size={20} />}
                 </div>
                 <div>
-                  <h2 className="font-bold text-foreground text-base">Add New Vendor / Supplier</h2>
+                  <h2 className="font-bold text-foreground text-base">
+                    {editingVendorId ? "Edit Vendor Details" : "Add New Vendor / Supplier"}
+                  </h2>
                   <p className="text-xs text-muted-foreground">
-                    Register paint manufacturers, packaging vendors, or raw material suppliers.
+                    {editingVendorId
+                      ? "Update supplier contact details, GSTIN, and opening balance payable."
+                      : "Register paint manufacturers, packaging vendors, or raw material suppliers."}
                   </p>
                 </div>
               </div>
@@ -1221,7 +1275,6 @@ export default function PurchasesPage() {
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   placeholder="0.00"
                   value={vendorOpening}
                   onChange={(e) => setVendorOpening(e.target.value)}
@@ -1240,15 +1293,15 @@ export default function PurchasesPage() {
                 <button
                   type="submit"
                   disabled={vendorSaving}
-                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="px-6 py-2 bg-[#1E3A8A] hover:bg-[#1e40af] text-white text-sm font-bold rounded-lg transition-all disabled:opacity-50 flex items-center gap-2"
                 >
                   {vendorSaving ? (
                     <>
-                      <Loader2 size={16} className="animate-spin" /> Saving Vendor...
+                      <Loader2 size={16} className="animate-spin" /> {editingVendorId ? "Updating Vendor..." : "Saving Vendor..."}
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 size={16} /> Save Vendor
+                      <CheckCircle2 size={16} /> {editingVendorId ? "Update Vendor" : "Save Vendor"}
                     </>
                   )}
                 </button>

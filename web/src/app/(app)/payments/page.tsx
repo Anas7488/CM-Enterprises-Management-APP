@@ -125,14 +125,23 @@ function KpiTile({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5 flex items-start gap-4 shadow-sm">
-      <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-        {icon}
+    <div className="bg-card border border-border rounded-xl p-3 sm:p-4 md:p-5 flex flex-col justify-between shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <div
+          className={`w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center flex-shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4 md:[&>svg]:w-5 md:[&>svg]:h-5 ${color}`}
+        >
+          {icon}
+        </div>
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground font-medium">{label}</p>
-        <p className="text-2xl font-bold text-foreground mt-0.5 truncate">{value}</p>
-        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+        <p className="text-[10px] sm:text-xs text-muted-foreground font-medium truncate">{label}</p>
+        <p
+          className="text-sm sm:text-base md:text-xl lg:text-2xl font-bold text-foreground mt-0.5 tracking-tight truncate"
+          title={value}
+        >
+          {value}
+        </p>
+        {sub && <p className="text-[9px] sm:text-[10px] text-muted-foreground/70 mt-0.5 truncate">{sub}</p>}
       </div>
     </div>
   );
@@ -333,16 +342,16 @@ function CollectionsContent() {
   return (
     <div className="space-y-6">
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">Collections</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">Collections</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Record received payments, track outstanding balances, and manage accounts receivable.
           </p>
         </div>
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
-          className="flex items-center gap-2 bg-[#1E3A8A] hover:bg-[#1e40af] text-white text-sm font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-all"
+          className="flex items-center justify-center gap-2 bg-[#1E3A8A] hover:bg-[#1e40af] text-white text-xs sm:text-sm font-semibold px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-lg shadow-sm transition-all"
         >
           <Plus size={16} />
           Record Payment
@@ -350,7 +359,7 @@ function CollectionsContent() {
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-4">
         <KpiTile
           label="Total Collected"
           value={fmt(summary?.total_collected || 0)}

@@ -9,6 +9,7 @@ from app.modules.vendors import service
 router = APIRouter()
 
 
+@router.get("", response_model=List[VendorOut], include_in_schema=False)
 @router.get("/", response_model=List[VendorOut])
 def list_vendors(
     search: Optional[str] = Query(None),
@@ -21,6 +22,7 @@ def list_vendors(
 
 
 @router.get("/{vendor_id}", response_model=VendorOut)
+@router.get("/{vendor_id}/", response_model=VendorOut, include_in_schema=False)
 def get_vendor(
     vendor_id: int,
     db: Session = Depends(get_db),
@@ -33,6 +35,7 @@ def get_vendor(
     return vendor
 
 
+@router.post("", response_model=VendorOut, status_code=201, include_in_schema=False)
 @router.post("/", response_model=VendorOut, status_code=201)
 def create_vendor(
     payload: VendorCreate,
@@ -47,6 +50,7 @@ def create_vendor(
 
 
 @router.put("/{vendor_id}", response_model=VendorOut)
+@router.put("/{vendor_id}/", response_model=VendorOut, include_in_schema=False)
 def update_vendor(
     vendor_id: int,
     payload: VendorUpdate,
@@ -61,6 +65,7 @@ def update_vendor(
 
 
 @router.delete("/{vendor_id}")
+@router.delete("/{vendor_id}/", include_in_schema=False)
 def delete_vendor(
     vendor_id: int,
     db: Session = Depends(get_db),

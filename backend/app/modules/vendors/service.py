@@ -51,7 +51,17 @@ def update_vendor(db: Session, vendor_id: int, data: dict) -> Vendor:
     if not vendor:
         raise ValueError(f"Vendor #{vendor_id} not found")
 
+    if "opening_balance" in data and data["opening_balance"] is not None:
+        old_opening = vendor.opening_balance or Decimal("0.00")
+        new_opening = Decimal(str(data["opening_balance"]))
+        diff = new_opening - old_opening
+        vendor.opening_balance = new_opening
+        if "outstanding_payable" not in data or data["outstanding_payable"] is None:
+            vendor.outstanding_payable = (vendor.outstanding_payable or Decimal("0.00")) + diff
+
     for k, v in data.items():
+        if k == "opening_balance":
+            continue
         if v is not None and hasattr(vendor, k):
             setattr(vendor, k, v)
 
