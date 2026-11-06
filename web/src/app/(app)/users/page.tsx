@@ -374,7 +374,7 @@ export default function UsersPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <div className="bg-[#1E293B]/70 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <span className="text-white/50 text-xs uppercase font-semibold">Total Accounts</span>

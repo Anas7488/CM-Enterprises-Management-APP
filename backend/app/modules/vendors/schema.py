@@ -25,6 +25,7 @@ class VendorUpdate(BaseModel):
     address: Optional[str] = None
     state_name: Optional[str] = None
     state_code: Optional[str] = None
+    opening_balance: Optional[Decimal] = None
     outstanding_payable: Optional[Decimal] = None
     is_active: Optional[bool] = None
 

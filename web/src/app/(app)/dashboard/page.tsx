@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Banknote,
   ShoppingCart,
@@ -91,6 +93,7 @@ function filterByRange<T extends { date: string }>(
 
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
+  const router = useRouter();
   const { startDate, endDate } = useDateRange();
 
   // Filtered datasets
@@ -109,7 +112,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* ── KPI Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <KpiCard
           icon={Banknote}
           label="Total Sales"
@@ -151,19 +154,20 @@ export default function DashboardPage() {
       {/* ── Quick Actions ─────────────────────────────────────────── */}
       <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
         <SectionHeader title="Quick Actions" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 md:gap-3">
           {[
-            { label: "New Order", icon: ShoppingCart, color: "bg-[#1E3A8A] hover:bg-[#1e40af]", href: "/orders" },
-            { label: "Add Customer", icon: Users, color: "bg-purple-600 hover:bg-purple-700", href: "/customers" },
-            { label: "Update Stock", icon: Archive, color: "bg-amber-600 hover:bg-amber-700", href: "/inventory" },
+            { label: "New Order", icon: ShoppingCart, color: "bg-[#1E3A8A] hover:bg-[#1e40af]", href: "/orders?action=new" },
+            { label: "Add Customer", icon: Users, color: "bg-purple-600 hover:bg-purple-700", href: "/customers?action=new" },
+            { label: "Update Stock", icon: Archive, color: "bg-amber-600 hover:bg-amber-700", href: "/inventory?action=new" },
           ].map((a) => (
-            <button
+            <Link
               key={a.label}
-              className={`flex items-center gap-2 px-4 py-3 rounded-lg text-white text-sm font-medium ${a.color}`}
+              href={a.href}
+              className={`flex items-center gap-2 px-4 py-3 rounded-lg text-white text-sm font-medium transition-colors cursor-pointer shadow-sm active:scale-[0.98] ${a.color}`}
             >
               <a.icon size={16} />
               {a.label}
-            </button>
+            </Link>
           ))}
         </div>
       </div>
@@ -202,7 +206,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Inventory Status ────────────────────────────────────── */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <SectionHeader title="Inventory Status" action="Manage Stock" />
+          <SectionHeader
+            title="Inventory Status"
+            action="Manage Stock"
+            onActionClick={() => router.push("/inventory")}
+          />
           <div className="space-y-2">
             {fInventory.length > 0 ? (
               fInventory.map((item) => (
@@ -224,7 +232,11 @@ export default function DashboardPage() {
 
         {/* ── Pending Orders ──────────────────────────────────────── */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <SectionHeader title="Pending Orders" action="View All" />
+          <SectionHeader
+            title="Pending Orders"
+            action="View All"
+            onActionClick={() => router.push("/orders")}
+          />
           <div className="space-y-2">
             {fOrders.length > 0 ? (
               fOrders.map((o, i) => (
@@ -244,7 +256,11 @@ export default function DashboardPage() {
 
         {/* ── Top Customers ───────────────────────────────────────── */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <SectionHeader title="Top Customers" action="View All" />
+          <SectionHeader
+            title="Top Customers"
+            action="View All"
+            onActionClick={() => router.push("/customers")}
+          />
           <div className="space-y-2">
             {fCustomers.length > 0 ? (
               fCustomers.map((c) => (
@@ -266,7 +282,11 @@ export default function DashboardPage() {
 
         {/* ── Top Selling Products + Product Movement ─────────────── */}
         <div className="bg-card rounded-xl border border-border p-4 shadow-sm">
-          <SectionHeader title="Top Selling Products" action="View All" />
+          <SectionHeader
+            title="Top Selling Products"
+            action="View All"
+            onActionClick={() => router.push("/products")}
+          />
           <div className="space-y-2 mb-4">
             {fProducts.length > 0 ? (
               fProducts.map((p) => (
