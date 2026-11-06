@@ -272,6 +272,17 @@ export default function OrdersPage() {
     loadReferenceData();
   }, []);
 
+  // Auto-open New Order modal when navigated with ?action=new
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("action") === "new") {
+        handleOpenNewOrderModal();
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+  }, []);
+
   const handleOpenNewOrderModal = () => {
     if (customers.length === 0 || products.length === 0) {
       loadReferenceData();
@@ -690,7 +701,7 @@ export default function OrdersPage() {
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <KpiCard
           icon={ShoppingCart}
           label="Total Orders"

@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 from decimal import Decimal
 from datetime import datetime
 
@@ -42,3 +42,8 @@ class InventoryOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StockAdjustIn(BaseModel):
+    adjustment_qty: int          # positive = add stock, negative = remove stock
+    reason: Optional[str] = None  # e.g. "Stock Received", "Damaged", "Correction"

@@ -95,8 +95,21 @@ body {
 
   /* Prevent double-tap zoom on inputs */
   input, select, textarea {
-    font-size: 16px !important;
     touch-action: manipulation;
+  }
+
+  /* Tighten vertical page spacing */
+  .space-y-6 > * + * {
+    margin-top: 1rem !important;
+  }
+  .space-y-5 > * + * {
+    margin-top: 0.875rem !important;
+  }
+
+  /* Shrink page h1 headings */
+  h1 {
+    font-size: 1.125rem !important;
+    line-height: 1.4 !important;
   }
 
   /* Smooth scrolling everywhere on mobile */

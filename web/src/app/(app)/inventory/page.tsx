@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { Package, AlertTriangle, IndianRupee, ArrowDownToLine, Search, Filter, Loader2, AlertCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Package, AlertTriangle, IndianRupee, ArrowDownToLine, Search, Filter, Loader2, AlertCircle, X, Plus, Minus } from "lucide-react";
 import { useDateRange, filterByRange } from "@/lib/date-range-context";
 import { KpiCard } from "@/shared/ui/KpiCard";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -22,9 +23,11 @@ interface InventoryItem {
   price: number;
   date: string;
   status: "good" | "low" | "critical";
+  productId?: number;
 }
 
 export default function InventoryPage() {
+  const router = useRouter();
   const { startDate, endDate } = useDateRange();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -34,6 +37,15 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // ── Stock Adjust Modal ──────────────────────────────────────────────────
+  const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; stock: number } | null>(null);
+  const [adjQty, setAdjQty] = useState<number | "">("");
+  const [adjMode, setAdjMode] = useState<"add" | "remove">("add");
+  const [adjReason, setAdjReason] = useState("");
+  const [adjSubmitting, setAdjSubmitting] = useState(false);
+  const [adjError, setAdjError] = useState("");
 
   useEffect(() => {
     async function loadInventory() {
@@ -68,7 +80,8 @@ export default function InventoryPage() {
             reorder: reorder,
             price: Number(item.product?.mrp) || 0,
             date: item.updated_at ? item.updated_at.split("T")[0] : new Date().toISOString().split("T")[0],
-            status: status
+            status: status,
+            productId: item.product_id,
           };
         });
 
@@ -81,6 +94,86 @@ export default function InventoryPage() {
     }
     loadInventory();
   }, []);
+
+  // Auto-open stock modal when navigated with ?action=new
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("action") === "new") {
+        openStockModal(null);
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    }
+  }, []);
+
+  function openStockModal(item: InventoryItem | null) {
+    setSelectedProduct(
+      item ? { id: item.id, name: item.name, stock: item.stock } : null
+    );
+    setAdjQty("");
+    setAdjMode("add");
+    setAdjReason("");
+    setAdjError("");
+    setStockModalOpen(true);
+  }
+
+  async function handleStockSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAdjError("");
+
+    if (!selectedProduct) {
+      setAdjError("Please select a product to adjust.");
+      return;
+    }
+    if (adjQty === "" || Number(adjQty) <= 0) {
+      setAdjError("Please enter a valid quantity greater than 0.");
+      return;
+    }
+
+    const finalQty = adjMode === "add" ? Number(adjQty) : -Number(adjQty);
+    setAdjSubmitting(true);
+    try {
+      const res = await authFetch(`/inventory/${selectedProduct.id}/adjust`, {
+        method: "PATCH",
+        body: JSON.stringify({ adjustment_qty: finalQty, reason: adjReason || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to update stock.");
+      setStockModalOpen(false);
+      // Refresh inventory list
+      setLoading(true);
+      setError("");
+      const refreshRes = await authFetch("/inventory/");
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        const mapped: InventoryItem[] = refreshData.map((item: any) => {
+          const physical = item.physical_qty || 0;
+          const reserved = item.reserved_qty || 0;
+          const available = item.available_qty || 0;
+          const reorder = item.product?.reorder_level || 0;
+          let status: "good" | "low" | "critical" = "good";
+          if (available <= reorder) status = available <= 5 ? "critical" : "low";
+          return {
+            id: String(item.id),
+            sku: item.product?.shade_code || item.product?.variant_code || String(item.product?.id || ""),
+            name: item.product?.display_name || "Unknown Product",
+            category: item.product?.category?.name || "Uncategorized",
+            stock: physical, reserved, available, reorder,
+            price: Number(item.product?.mrp) || 0,
+            date: item.updated_at ? item.updated_at.split("T")[0] : new Date().toISOString().split("T")[0],
+            status,
+            productId: item.product_id,
+          };
+        });
+        setInventory(mapped);
+      }
+    } catch (err: any) {
+      setAdjError(err.message || "Failed to update stock.");
+    } finally {
+      setAdjSubmitting(false);
+      setLoading(false);
+    }
+  }
 
   // Unique categories for the dropdown
   const categories = useMemo(() => Array.from(new Set(inventory.map(i => i.category))), [inventory]);
@@ -135,14 +228,17 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Inventory Management</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage stock levels, reorder points, and warehouse status.</p>
         </div>
-        <button className="flex items-center gap-2 bg-[#1E3A8A] hover:bg-[#1e40af] text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all">
+        <button
+          onClick={() => openStockModal(null)}
+          className="flex items-center gap-2 bg-[#1E3A8A] hover:bg-[#1e40af] text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-sm transition-all"
+        >
           <ArrowDownToLine size={16} />
-          Receive Stock
+          Update Stock
         </button>
       </div>
 
       {/* ── KPI Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <KpiCard
           icon={Package}
           label="Total Products"
@@ -261,6 +357,7 @@ export default function InventoryPage() {
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Value</th>
                 <th className="px-6 py-3 text-right">Last Updated</th>
+                <th className="px-6 py-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -301,11 +398,19 @@ export default function InventoryPage() {
                     <td className="px-6 py-4 text-right">
                       <span className="text-xs text-muted-foreground">{new Date(item.date).toLocaleDateString()}</span>
                     </td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => openStockModal(item)}
+                        className="px-2.5 py-1 text-xs font-medium rounded-lg bg-[#1E3A8A]/10 text-[#1E3A8A] hover:bg-[#1E3A8A]/20 transition-colors whitespace-nowrap"
+                      >
+                        Update
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground text-sm">
+                  <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground text-sm">
                     No inventory items found matching your filters.
                   </td>
                 </tr>
@@ -314,6 +419,150 @@ export default function InventoryPage() {
           </table>
         </div>
       </div>
+
+      {/* ── Update Stock Modal ──────────────────────────────────────── */}
+      {stockModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-card w-full max-w-md rounded-2xl shadow-2xl border border-border">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-base font-bold text-foreground">Update Stock</h2>
+              <button
+                onClick={() => setStockModalOpen(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleStockSubmit} className="px-6 py-5 space-y-4">
+              {adjError && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 text-xs">
+                  <AlertCircle size={14} />
+                  {adjError}
+                </div>
+              )}
+
+              {/* Product selector (shown when no product pre-selected) */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">
+                  Product <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedProduct?.id || ""}
+                  onChange={(e) => {
+                    const item = inventory.find((i) => i.id === e.target.value);
+                    setSelectedProduct(item ? { id: item.id, name: item.name, stock: item.stock } : null);
+                  }}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20"
+                >
+                  <option value="">Select a product...</option>
+                  {inventory.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} (Stock: {item.stock})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Add / Remove toggle */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Adjustment Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjMode("add")}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      adjMode === "add"
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    <Plus size={14} /> Add Stock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjMode("remove")}
+                    className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      adjMode === "remove"
+                        ? "bg-red-600 text-white border-red-600"
+                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                    }`}
+                  >
+                    <Minus size={14} /> Remove Stock
+                  </button>
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={adjQty}
+                  onChange={(e) => setAdjQty(e.target.value ? Number(e.target.value) : "")}
+                  placeholder="Enter quantity"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20"
+                />
+                {selectedProduct && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Current stock: {selectedProduct.stock} →{" "}
+                    <span className={adjMode === "add" ? "text-emerald-600 font-medium" : "text-red-500 font-medium"}>
+                      {adjMode === "add"
+                        ? selectedProduct.stock + (Number(adjQty) || 0)
+                        : Math.max(0, selectedProduct.stock - (Number(adjQty) || 0))}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block text-xs font-semibold text-foreground mb-1.5">Reason (optional)</label>
+                <input
+                  type="text"
+                  value={adjReason}
+                  onChange={(e) => setAdjReason(e.target.value)}
+                  placeholder="e.g. Stock Received, Damaged, Correction..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-[#1E3A8A]/20"
+                />
+              </div>
+            </form>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setStockModalOpen(false)}
+                disabled={adjSubmitting}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStockSubmit}
+                disabled={adjSubmitting}
+                className={`flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-lg text-white transition-colors disabled:opacity-60 ${
+                  adjMode === "add" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"
+                }`}
+              >
+                {adjSubmitting ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : adjMode === "add" ? (
+                  <Plus size={14} />
+                ) : (
+                  <Minus size={14} />
+                )}
+                {adjSubmitting ? "Saving..." : adjMode === "add" ? "Add Stock" : "Remove Stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
